@@ -1,0 +1,20 @@
+changelog:
+  exclude:
+    labels:
+      - relnotes-ignore
+  categories:
+    - title: Features
+      labels:
+        - relnotes-feature
+    - title: Fixes
+      labels:
+        - relnotes-fix
+    - title: Changes
+      labels:
+        - relnotes-change
+    - title: Packaging
+      labels:
+        - relnotes-packaging
+    - title: Other Changes
+      labels:
+        - "*"
