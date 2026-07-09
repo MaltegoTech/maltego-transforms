@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Maltego Transforms SDK documentation
+    url: https://docs.maltego.com/en/support/solutions/articles/15000062349-maltego-transforms-sdk-overview
+    about: Check the public SDK documentation for setup and usage guidance.

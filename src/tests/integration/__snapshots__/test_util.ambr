@@ -1,0 +1,9 @@
+# serializer version: 1
+# name: test_non_200_response
+  dict({
+    'error': dict({
+      'message': 'rate limit, wait 20 minutes',
+      'type': 'rate_limit_exceeded',
+    }),
+  })
+# ---

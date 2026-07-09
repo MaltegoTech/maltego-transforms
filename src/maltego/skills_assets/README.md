@@ -1,0 +1,1 @@
+Provider-agnostic SDK skill assets. Copied into generated projects when `maltego-transforms start --with-skills` or `--skills-scope local` is used. `--skills-scope global` installs the same assets into `~/.agents/skills`.
