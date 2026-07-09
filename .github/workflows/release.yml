@@ -23,9 +23,9 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
@@ -49,14 +49,14 @@ jobs:
           mkdir -p dist/sbom
           poetry run python resources/generate_sbom.py --output dist/sbom/maltego-transforms-sbom.cdx.json
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist-packages
           path: |
             dist/*.whl
             dist/*.tar.gz
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist-sbom
           path: dist/sbom/maltego-transforms-sbom.cdx.json
@@ -77,7 +77,7 @@ jobs:
     environment:
       name: testpypi
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist-packages
           path: dist/
@@ -100,7 +100,7 @@ jobs:
     environment:
       name: pypi
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist-packages
           path: dist/
