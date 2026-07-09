@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Poetry
+        run: pip install poetry==2.1.4
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Lint (advisory — never fails the build)
+        run: poetry run ruff check . --exit-zero
+
+      - name: Test with coverage
+        run: poetry run pytest src/tests --cov=src/maltego --cov-report=term-missing
+
+      - name: Build wheel + sdist
+        run: poetry build
