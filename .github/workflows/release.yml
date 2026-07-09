@@ -1,0 +1,121 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      publish-target:
+        description: Publish target for manual runs
+        type: choice
+        required: true
+        default: testpypi
+        options:
+          - testpypi
+          - pypi
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Poetry
+        run: pip install poetry==2.1.4
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Lint (advisory — never fails the build)
+        run: poetry run ruff check . --exit-zero
+
+      - name: Test with coverage
+        run: poetry run pytest src/tests --cov=src/maltego --cov-report=term-missing
+
+      - name: Build wheel + sdist
+        run: poetry build
+
+      - name: Generate CycloneDX SBOM
+        run: |
+          mkdir -p dist/sbom
+          poetry run python resources/generate_sbom.py --output dist/sbom/maltego-transforms-sbom.cdx.json
+
+      - name: Attest release distributions
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            dist/*.whl
+            dist/*.tar.gz
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-packages
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-sbom
+          path: dist/sbom/maltego-transforms-sbom.cdx.json
+
+      - name: Attach wheel + sdist + SBOM to the GitHub Release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/*.whl dist/*.tar.gz dist/sbom/maltego-transforms-sbom.cdx.json --clobber
+
+  publish-testpypi:
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    if: github.event_name == 'release' || inputs.publish-target == 'testpypi' || inputs.publish-target == 'pypi'
+    permissions:
+      id-token: write
+    environment:
+      name: testpypi
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist-packages
+          path: dist/
+
+      - name: Publish release distributions to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+  publish-pypi:
+    runs-on: ubuntu-latest
+    needs:
+      - build
+      - publish-testpypi
+    if: github.event_name == 'release' || inputs.publish-target == 'pypi'
+    permissions:
+      id-token: write
+    environment:
+      name: pypi
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist-packages
+          path: dist/
+
+      - name: Publish release distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/

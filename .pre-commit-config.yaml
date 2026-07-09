@@ -1,0 +1,10 @@
+minimum_pre_commit_version: "3.0.0"
+
+repos:
+  - repo: local
+    hooks:
+      - id: commitizen-conventional-commits
+        name: Commitizen Conventional Commits
+        entry: poetry run cz check --commit-msg-file
+        language: system
+        stages: [commit-msg]
