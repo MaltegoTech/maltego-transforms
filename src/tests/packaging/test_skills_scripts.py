@@ -625,6 +625,54 @@ def test_discover_server_normalizes_custom_api_prefix():
     ]
 
 
+@pytest.mark.parametrize(
+    ("host", "expected"),
+    [
+        ("localhost", "http://localhost:8080"),
+        ("127.0.0.1", "http://127.0.0.1:8080"),
+        ("[::1]", "http://[::1]:8080"),
+        ("2001:db8::1", "http://[2001:db8::1]:8080"),
+    ],
+)
+def test_discover_server_builds_urls_from_valid_host_literals(host, expected):
+    """The CLI accepts normal remote hosts but constructs an unambiguous URL
+    authority rather than interpolating command-line text into one."""
+    import sys as _sys
+    _sys.path.insert(0, str(SCRIPTS_DIR_DISCOVER))
+    try:
+        import discover_server  # type: ignore
+    finally:
+        _sys.path.pop(0)
+
+    assert discover_server._build_base_url(host, 8080) == expected
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "http://example.test",
+        "example.test/path",
+        "example.test?query=value",
+        "user@example.test",
+        "example.test:1234",
+        "example.test#fragment",
+        "example.test whitespace",
+    ],
+)
+def test_discover_server_rejects_url_authority_injection(host):
+    """A CLI host is a hostname/IP literal, never a complete URL or authority
+    fragment that could redirect discovery requests."""
+    import sys as _sys
+    _sys.path.insert(0, str(SCRIPTS_DIR_DISCOVER))
+    try:
+        import discover_server  # type: ignore
+    finally:
+        _sys.path.pop(0)
+
+    with pytest.raises(ValueError, match="host"):
+        discover_server._build_base_url(host, 8080)
+
+
 # ---------------------------------------------------------------------------
 # sdk_project_check.py tests
 # ---------------------------------------------------------------------------

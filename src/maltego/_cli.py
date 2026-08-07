@@ -235,7 +235,7 @@ def render_pyproject(project_name: str, project_manager: str) -> Optional[str]:
         'version = "0.1.0"',
         'requires-python = ">=3.10"',
         "dependencies = [",
-        '    "maltego-transforms>=1.0.0",',
+        '    "maltego-transforms>=1.0.1",',
         '    "maltego-transforms-std-entities>=1.0.0",',
         "]",
     ]

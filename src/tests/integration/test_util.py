@@ -211,6 +211,47 @@ async def test_non_200_response(monkeypatch, snapshot):
     client.rate_throttler._leak_task.cancel()
 
 
+@pytest.mark.asyncio
+async def test_429_response_maps_to_data_provider_unavailable(monkeypatch):
+    """Regression: 429 used to fall through to a bare, untyped MaltegoException
+    via the generic else branch, indistinguishable from any other unhandled
+    4xx. It now gets its own explicit mapping to a typed exception so
+    connectors can react to rate-limiting specifically."""
+    from maltego.model.exception import MaltegoHTTPDataProviderUnavailable
+
+    client = IntegrationClient(max_calls_per_period=100, period_length_seconds=1.0)
+
+    async def mock_request(method, **kwargs) -> Response:
+        return Response(status_code=429, content=b"{}")
+
+    monkeypatch.setattr(client.httpx_client, "request", mock_request)
+    with pytest.raises(MaltegoHTTPDataProviderUnavailable) as exc_info:
+        await client.get(**CLIENT_CALL_ARGS_GET, context=CONTEXT)
+    assert exc_info.value.response.status_code == 429
+    client.rate_throttler._leak_task.cancel()
+
+
+@pytest.mark.asyncio
+async def test_unhandled_4xx_maps_to_data_provider_invalid_response(monkeypatch):
+    """Regression: any 4xx not covered by a specific branch (401/403/404/429)
+    used to raise a bare, untyped MaltegoException. It now raises the typed
+    MaltegoHTTPDataProviderInvalidResponse so connectors can distinguish
+    "upstream rejected this request" from "SDK-internal transport failure"
+    instead of catching the same untyped exception for both."""
+    from maltego.model.exception import MaltegoHTTPDataProviderInvalidResponse
+
+    client = IntegrationClient(max_calls_per_period=100, period_length_seconds=1.0)
+
+    async def mock_request(method, **kwargs) -> Response:
+        return Response(status_code=418, content=b"{}")
+
+    monkeypatch.setattr(client.httpx_client, "request", mock_request)
+    with pytest.raises(MaltegoHTTPDataProviderInvalidResponse) as exc_info:
+        await client.get(**CLIENT_CALL_ARGS_GET, context=CONTEXT)
+    assert exc_info.value.response.status_code == 418
+    client.rate_throttler._leak_task.cancel()
+
+
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_integration_client_request_method(mocked_integration_client):

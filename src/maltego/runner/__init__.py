@@ -374,6 +374,10 @@ class AsyncTransformRunner(TransformRunner):
 
 class ThreadedTransformRunner(TransformRunner):
 
+    _CANCELLATION_DRAIN_TIMEOUT_SECONDS = 2.0
+    _CANCELLATION_RETRY_AFTER_SECONDS = 1.0
+    _CANCELLATION_DRAIN_POLL_SECONDS = 0.1
+
     def __init__(
         self,
         middlewares: List[TransformMiddleware],
@@ -398,6 +402,72 @@ class ThreadedTransformRunner(TransformRunner):
             self.current_loop = 0
         return loop
 
+    @staticmethod
+    def _consume_task_outcomes(tasks: set[asyncio.Task]) -> None:
+        """Mark completed task failures as observed during loop teardown."""
+        for task in tasks:
+            if task.done() and not task.cancelled():
+                task.exception()
+
+    @staticmethod
+    def _pending_worker_tasks(
+        loop: asyncio.AbstractEventLoop,
+        current_task: Optional[asyncio.Task],
+    ) -> set[asyncio.Task]:
+        return {
+            task for task in asyncio.all_tasks(loop=loop) if task is not current_task
+        }
+
+    async def _drain_cancelled_tasks(self, loop: asyncio.AbstractEventLoop) -> None:
+        """Cancel worker tasks until the loop is quiet or a deadline expires.
+
+        The coroutine running this cleanup is deliberately excluded: cancelling
+        it would interrupt the very shutdown process responsible for closing the
+        worker loop.
+        """
+        current_task = asyncio.current_task()
+        started_at = loop.time()
+        deadline = started_at + self._CANCELLATION_DRAIN_TIMEOUT_SECONDS
+        retry_at = started_at + self._CANCELLATION_RETRY_AFTER_SECONDS
+        cancellation_requested: set[asyncio.Task] = set()
+        retry_requested = False
+
+        while True:
+            pending_tasks = self._pending_worker_tasks(loop, current_task)
+            if not pending_tasks:
+                return
+
+            remaining_time = deadline - loop.time()
+            if remaining_time <= 0:
+                break
+
+            retry_tasks = pending_tasks & cancellation_requested
+            newly_pending_tasks = pending_tasks - cancellation_requested
+            for task in newly_pending_tasks:
+                task.cancel()
+            cancellation_requested.update(newly_pending_tasks)
+
+            if not retry_requested and loop.time() >= retry_at:
+                for task in retry_tasks:
+                    task.cancel()
+                retry_requested = True
+
+            completed_tasks, _ = await asyncio.wait(
+                pending_tasks,
+                timeout=min(
+                    self._CANCELLATION_DRAIN_POLL_SECONDS,
+                    remaining_time,
+                ),
+            )
+            self._consume_task_outcomes(completed_tasks)
+
+        pending_tasks = self._pending_worker_tasks(loop, current_task)
+        if pending_tasks:
+            log.error(
+                "Closing transform runner loop with %d task(s) still pending after cancellation deadline.",
+                len(pending_tasks),
+            )
+
     def __thread(self, startup_event: Event) -> None:
         loop = asyncio.new_event_loop()
         self.data.loop = loop
@@ -409,8 +479,7 @@ class ThreadedTransformRunner(TransformRunner):
         except asyncio.CancelledError as e:
             log.error(f'Event Loop canceled {e}')
         finally:
-            for task in asyncio.all_tasks(loop=loop):
-                task.cancel()
+            loop.run_until_complete(self._drain_cancelled_tasks(loop))
             loop.run_until_complete(loop.shutdown_asyncgens())
             loop.close()
 

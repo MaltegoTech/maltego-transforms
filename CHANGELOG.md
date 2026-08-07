@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 1.0.1 - 2026-08-07
+
+### Fixed
+- `IntegrationClient._call_httpx_method` no longer raises a bare, untyped
+  `MaltegoException` for unhandled 4xx upstream responses. HTTP 429 (rate
+  limit) now maps to `MaltegoHTTPDataProviderUnavailable`; all other
+  unhandled non-2xx codes map to `MaltegoHTTPDataProviderInvalidResponse`
+  instead of the previous untyped exception, so connectors relying on typed
+  exception handling can distinguish and react to these cases correctly.
+- Threaded transform runners now await cancellation cleanup before closing
+  their event loop, preventing intermittent pending-task warnings during
+  shutdown.
+- The generated discovery helper validates its host argument as a hostname or
+  IP literal before constructing request URLs, rejecting URL authority/path
+  injection while preserving local and remote SDK discovery.
+
 ## 1.0.0 - 2026-07-07
 
 Initial public release of the `maltego-transforms` Python SDK.

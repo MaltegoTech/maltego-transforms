@@ -20,7 +20,7 @@ pytestmark = pytest.mark.template
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 EXPECTED_TEMPLATE_DEPENDENCIES = [
-    "maltego-transforms>=1.0.0",
+    "maltego-transforms>=1.0.1",
     "maltego-transforms-std-entities>=1.0.0",
 ]
 
@@ -70,7 +70,7 @@ def test_start_supports_explicit_project_manager(tmp_path, monkeypatch, project_
     else:
         pyproject = pyproject_path.read_text()
         assert 'name = "managed-project"' in pyproject
-        assert '    "maltego-transforms>=1.0.0",' in pyproject
+        assert '    "maltego-transforms>=1.0.1",' in pyproject
         assert '    "maltego-transforms-std-entities>=1.0.0",' in pyproject
         if project_manager == "poetry":
             assert "[tool.poetry]" in pyproject

@@ -25,6 +25,7 @@ from maltego.model.exception import MaltegoTransformTimeoutError
 from maltego.model.graph import MaltegoGraph
 from maltego.model.link import MaltegoLink
 from maltego.model.types import ExecutionState
+from maltego.middlewares.middlewares import TransformMiddleware
 from maltego.runner import ThreadedTransformRunner, TransformRunner
 from maltego.runner.transform_execution_context import (
     MultiplexedTransformResultSet,
@@ -170,6 +171,300 @@ def test_threaded_runner_shutdown_closes_loop_with_pending_tasks():
                 task.cancel()
             loop.run_until_complete(loop.shutdown_asyncgens())
             loop.close()
+
+
+def test_threaded_runner_shutdown_awaits_cancelled_task_finalizers():
+    """Stopping a worker loop must give cancelled transform tasks a chance to
+    finish their cleanup before closing the loop."""
+    runner = ThreadedTransformRunner(
+        middlewares=[],
+        transform_execution_timeout=60,
+        middleware_execution_timeout=60,
+    )
+    startup_event = Event()
+    task_started = Event()
+    task_finalized = Event()
+    thread = Thread(
+        target=runner._ThreadedTransformRunner__thread,
+        args=(startup_event,),
+        daemon=True,
+    )
+
+    async def waits_until_cancelled() -> None:
+        try:
+            task_started.set()
+            await asyncio.Event().wait()
+        finally:
+            task_finalized.set()
+
+    thread.start()
+    assert startup_event.wait(timeout=1)
+
+    loop = runner.loops[0]
+    asyncio.run_coroutine_threadsafe(waits_until_cancelled(), loop)
+    assert task_started.wait(timeout=1)
+    runner.shutdown()
+    thread.join(timeout=1)
+
+    assert task_finalized.is_set()
+    assert not thread.is_alive()
+    assert loop.is_closed()
+
+
+def test_threaded_runner_shutdown_retries_cancellation_after_grace_period():
+    """A task that absorbs one cancellation must not make shutdown wait
+    forever; the runner retries cancellation after its grace period."""
+    runner = ThreadedTransformRunner(
+        middlewares=[],
+        transform_execution_timeout=60,
+        middleware_execution_timeout=60,
+    )
+    task_started = Event()
+    first_cancellation = Event()
+    task_finalized = Event()
+    shutdown_finished = Event()
+    async def absorbs_one_cancellation() -> None:
+        try:
+            task_started.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                first_cancellation.set()
+                await asyncio.Event().wait()
+        finally:
+            task_finalized.set()
+
+    runner.startup()
+    loop = runner.loops[0]
+    asyncio.run_coroutine_threadsafe(absorbs_one_cancellation(), loop)
+    assert task_started.wait(timeout=1)
+
+    def shutdown_runner() -> None:
+        runner.shutdown()
+        shutdown_finished.set()
+
+    shutdown_thread = Thread(target=shutdown_runner, daemon=True)
+    shutdown_thread.start()
+    try:
+        assert first_cancellation.wait(timeout=1)
+        assert shutdown_finished.wait(timeout=3)
+    finally:
+        if not shutdown_finished.is_set():
+            loop.call_soon_threadsafe(
+                lambda: [pending.cancel() for pending in asyncio.all_tasks(loop)]
+            )
+        shutdown_thread.join(timeout=1)
+
+    assert task_finalized.is_set()
+    assert not shutdown_thread.is_alive()
+
+
+def test_threaded_runner_shutdown_observes_task_finalizer_exceptions():
+    """A cancellation finalizer may fail, but shutdown must consume that
+    exception instead of producing a late 'exception was never retrieved'
+    warning."""
+    runner = ThreadedTransformRunner(
+        middlewares=[],
+        transform_execution_timeout=60,
+        middleware_execution_timeout=60,
+    )
+    task_started = Event()
+    tasks = []
+
+    async def raises_during_cancellation() -> None:
+        try:
+            task_started.set()
+            await asyncio.Event().wait()
+        except asyncio.CancelledError as exc:
+            raise RuntimeError("finalizer failure") from exc
+
+    runner.startup()
+    loop = runner.loops[0]
+    loop.call_soon_threadsafe(
+        lambda: tasks.append(asyncio.create_task(raises_during_cancellation()))
+    )
+    assert task_started.wait(timeout=1)
+
+    runner.shutdown()
+
+    assert tasks[0].done()
+    assert not tasks[0]._log_traceback  # pylint: disable=protected-access
+
+
+def test_threaded_runner_shutdown_cancels_tasks_started_by_finalizers():
+    """A cancellation finalizer can schedule follow-up work; shutdown must
+    discover and cancel it before closing the worker loop."""
+    runner = ThreadedTransformRunner(
+        middlewares=[],
+        transform_execution_timeout=60,
+        middleware_execution_timeout=60,
+    )
+    parent_started = Event()
+    child_started = Event()
+    child_finalized = Event()
+
+    async def child_task() -> None:
+        try:
+            child_started.set()
+            await asyncio.Event().wait()
+        finally:
+            child_finalized.set()
+
+    async def starts_child_during_cancellation() -> None:
+        try:
+            parent_started.set()
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            asyncio.create_task(child_task())
+
+    runner.startup()
+    loop = runner.loops[0]
+    asyncio.run_coroutine_threadsafe(starts_child_during_cancellation(), loop)
+    assert parent_started.wait(timeout=1)
+
+    runner.shutdown()
+
+    assert child_started.is_set()
+    assert child_finalized.is_set()
+
+
+def test_threaded_runner_shutdown_drains_nested_finalizer_tasks():
+    """Shutdown continues draining when cancellation cleanup creates more than
+    one generation of follow-up tasks."""
+    runner = ThreadedTransformRunner(
+        middlewares=[],
+        transform_execution_timeout=60,
+        middleware_execution_timeout=60,
+    )
+    parent_started = Event()
+    grandchild_finalized = Event()
+
+    async def grandchild_task() -> None:
+        try:
+            await asyncio.Event().wait()
+        finally:
+            grandchild_finalized.set()
+
+    async def child_task() -> None:
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            asyncio.create_task(grandchild_task())
+
+    async def starts_child_during_cancellation() -> None:
+        try:
+            parent_started.set()
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            asyncio.create_task(child_task())
+
+    runner.startup()
+    loop = runner.loops[0]
+    asyncio.run_coroutine_threadsafe(starts_child_during_cancellation(), loop)
+    assert parent_started.wait(timeout=1)
+
+    runner.shutdown()
+
+    assert grandchild_finalized.is_set()
+
+
+def test_threaded_runner_shutdown_allows_cooperative_cleanup_to_finish():
+    """A task that handles cancellation needs an uninterrupted grace period
+    for async cleanup rather than another cancellation on every poll."""
+    runner = ThreadedTransformRunner(
+        middlewares=[],
+        transform_execution_timeout=60,
+        middleware_execution_timeout=60,
+    )
+    task_started = Event()
+    cleanup_completed = Event()
+    cleanup_interrupted = Event()
+
+    async def completes_cleanup_after_cancellation() -> None:
+        try:
+            task_started.set()
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            try:
+                await asyncio.sleep(0.25)
+            except asyncio.CancelledError:
+                cleanup_interrupted.set()
+                raise
+            cleanup_completed.set()
+
+    runner.startup()
+    loop = runner.loops[0]
+    asyncio.run_coroutine_threadsafe(completes_cleanup_after_cancellation(), loop)
+    assert task_started.wait(timeout=1)
+
+    runner.shutdown()
+
+    assert cleanup_completed.is_set()
+    assert not cleanup_interrupted.is_set()
+
+
+def test_threaded_runner_shutdown_cancels_real_after_transform_hook():
+    """A real TransformExecutionContext blocked in its after-transform hook
+    is drained cleanly when its threaded worker is shut down."""
+    runner = ThreadedTransformRunner(
+        middlewares=[],
+        transform_execution_timeout=60,
+        middleware_execution_timeout=60,
+    )
+    after_transform_started = Event()
+    after_transform_finalized = Event()
+
+    class BlockingAfterTransformMiddleware(TransformMiddleware):
+        async def before_transform(self, *args, **kwargs) -> None:
+            del args, kwargs
+
+        async def after_transform(self, *args, **kwargs) -> None:
+            del args, kwargs
+            try:
+                after_transform_started.set()
+                await asyncio.Event().wait()
+            finally:
+                after_transform_finalized.set()
+
+    class SuccessfulTransform:
+        name = "after_transform_shutdown"
+        display_name = "After transform shutdown"
+        composite_entities = False
+        client_filter = None
+        input_constraint = None
+        annotation = MagicMock()
+
+        async def __call__(self, *args, **kwargs) -> None:
+            del args, kwargs
+
+    transform = SuccessfulTransform()
+    transform.annotation.uses_graph_payload.return_value = False
+    request = MagicMock()
+    request.headers = {}
+    context = MaltegoContext(MaltegoGraph(), request, v3_request=True)
+    execution_context = TransformExecutionContext(
+        run_id="after-transform-shutdown",
+        transform=transform,
+        transform_input=MockEntity("input"),
+        transform_settings={},
+        limit=10,
+        context=context,
+        transform_execution_timeout=60,
+        middleware_execution_timeout=60,
+        middlewares=[BlockingAfterTransformMiddleware()],
+    )
+
+    runner.startup()
+    loop = runner.loops[0]
+    execution_context.set_event_loop(loop)
+    asyncio.run_coroutine_threadsafe(execution_context.start(), loop)
+    assert after_transform_started.wait(timeout=1)
+
+    runner.shutdown()
+
+    assert execution_context.after_transform_task is not None
+    assert execution_context.after_transform_task.cancelled()
+    assert after_transform_finalized.is_set()
 
 
 def test_threaded_runner_shutdown_is_idempotent():
