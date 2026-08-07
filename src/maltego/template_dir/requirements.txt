@@ -1,2 +1,2 @@
-maltego-transforms>=1.0.0
+maltego-transforms>=1.0.1
 maltego-transforms-std-entities>=1.0.0

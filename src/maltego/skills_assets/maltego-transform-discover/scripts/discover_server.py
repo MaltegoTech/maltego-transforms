@@ -13,11 +13,19 @@ This script never imports or executes customer transform code — it queries the
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
+import re
 import sys
 import urllib.error
 import urllib.request
 from urllib.parse import urlparse
+
+
+_HOSTNAME_PATTERN = re.compile(
+    r"(?=.{1,253}\Z)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*"
+    r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.?\Z"
+)
 
 
 def _get_json(url: str) -> object:
@@ -46,8 +54,36 @@ def _normalise_api_prefix(api_prefix: str) -> str:
     return f"{prefix}/api/v3"
 
 
+def _build_base_url(host: str, port: int) -> str:
+    """Return a local HTTP URL from a hostname or IP literal.
+
+    ``host`` intentionally accepts remote servers, but it must be one host:
+    callers cannot supply a URL, path, credentials, or alternate port through
+    this CLI parameter.
+    """
+    if not 1 <= port <= 65535:
+        raise ValueError("port must be between 1 and 65535")
+
+    candidate = host.strip()
+    if candidate != host or not candidate:
+        raise ValueError("host must be a non-empty hostname or IP literal")
+    if candidate.startswith("[") and candidate.endswith("]"):
+        candidate = candidate[1:-1]
+
+    try:
+        ip = ipaddress.ip_address(candidate)
+    except ValueError:
+        if not _HOSTNAME_PATTERN.fullmatch(candidate):
+            raise ValueError("host must be a hostname or IP literal")
+        return f"http://{candidate}:{port}"
+
+    if ip.version == 6:
+        return f"http://[{ip.compressed}]:{port}"
+    return f"http://{ip.compressed}:{port}"
+
+
 def discover(host: str, port: int, api_prefix: str = "api/v3") -> dict:
-    base = f"http://{host}:{port}"
+    base = _build_base_url(host, port)
     discovery_base = f"{base}/{_normalise_api_prefix(api_prefix)}"
 
     transforms = _get_json(f"{discovery_base}/transforms")
