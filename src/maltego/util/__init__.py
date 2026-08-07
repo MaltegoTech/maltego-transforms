@@ -11,6 +11,7 @@ from httpx import Response, Headers
 from httpx._types import ProxyTypes
 from maltego.model.exception import (MaltegoException,
                                      MaltegoHTTPDataProviderAPIKeyInvalid,
+                                     MaltegoHTTPDataProviderInvalidResponse,
                                      MaltegoHTTPDataProviderNotFound,
                                      MaltegoHTTPDataProviderUnavailable,
                                      MaltegoHTTPUnauthorized
@@ -381,10 +382,18 @@ class IntegrationClient:
                 )
                 context.upstream_exceptions.append(exc)
                 raise exc
+            elif res.status_code == httpx.codes.TOO_MANY_REQUESTS:
+                log.error(f"Upstream API: {url_netloc} rate limited (429).")
+                exc = MaltegoHTTPDataProviderUnavailable(
+                    f"Upstream API: {url_netloc} rate limited (429).", response=res
+                )
+                context.upstream_exceptions.append(exc)
+                raise exc
             else:
-                log.error(f"Upstream API: {url_netloc} API returned a non-2xx code ({res.status_code}).")
-                exc = MaltegoException(
-                    f"Upstream API: {url_netloc} API returned a non-2xx code ({res.status_code}).", response=res
+                log.error(f"Upstream API: {url_netloc} API returned an unexpected response ({res.status_code}).")
+                exc = MaltegoHTTPDataProviderInvalidResponse(
+                    f"Upstream API: {url_netloc} API returned an unexpected response ({res.status_code}).",
+                    response=res,
                 )
                 context.upstream_exceptions.append(exc)
                 raise exc
