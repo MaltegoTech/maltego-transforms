@@ -24,17 +24,6 @@ jobs:
       attestations: write
       artifact-metadata: write
     steps:
-      - name: Verify release is an existing draft
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ inputs.release-tag }}
-        run: |
-          if ! gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft' | grep -qx true; then
-            echo "Release $RELEASE_TAG must exist as a draft before preparation."
-            exit 1
-          fi
-
       - name: Verify preparation runs from main
         run: |
           if [ "$GITHUB_REF" != "refs/heads/main" ]; then

@@ -20,15 +20,21 @@ def _job(workflow: str, name: str, next_name: str | None = None) -> str:
     return body
 
 
-def test_prepare_release_workflow_requires_an_existing_draft_and_tag_version_match() -> None:
+def test_prepare_release_checks_the_draft_only_with_release_write_access() -> None:
     workflow = _workflow("prepare-release.yml")
+    build = _job(workflow, "build-release", "attach-release")
+    attach = _job(workflow, "attach-release")
 
     assert "release-tag:" in workflow
     assert "ref: ${{ inputs.release-tag }}" in workflow
     assert 'NORMALIZED_TAG="${RELEASE_TAG#v}"' in workflow
     assert 'poetry version --short' in workflow
-    assert 'gh release view "$RELEASE_TAG" --json isDraft' in workflow
-    assert "must exist as a draft" in workflow
+    assert 'gh release view "$RELEASE_TAG" --json isDraft' not in build
+    assert 'gh release view "$RELEASE_TAG" --json isDraft' in attach
+    assert "must still be a draft" in attach
+    assert attach.index("Verify release is still a draft") < attach.index(
+        "Attach wheel + sdist + SBOM to the draft release"
+    )
 
 
 def test_prepare_release_workflow_attaches_all_assets_without_publishing() -> None:
