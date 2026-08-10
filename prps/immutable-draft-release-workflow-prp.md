@@ -24,12 +24,12 @@ same already-attached package distributions to PyPI after publication.
 
 ## Design
 
-`workflow_dispatch` accepts a `release-tag` input. A read-only job confirms the
-matching GitHub release is a draft, checks out that tag, validates its normalized
-package version, then tests and builds the package and SBOM. A separate,
-write-enabled job attaches those three assets while leaving the draft
-unpublished. GitHub attestations bind the artifacts to the preparation workflow
-and tagged main commit.
+`workflow_dispatch` accepts a `release-tag` input. A read-only job checks out
+that tag, validates its normalized package version, then tests and builds the
+package and SBOM. A separate, write-enabled job confirms the matching GitHub
+release is still a draft immediately before attaching those three assets while
+leaving the draft unpublished. GitHub attestations bind the artifacts to the
+preparation workflow and tagged main commit.
 
 The release-published path requires an immutable release containing one wheel,
 one sdist, and one SBOM, then verifies their attestations before publishing the
@@ -48,7 +48,8 @@ interact with GitHub releases.
 
 - Workflow exposes an explicit release-tag preparation input.
 - Draft preparation checks out the requested tag, validates normalized package
-  version, requires a draft, and uploads all three assets before publication.
+  version, and uploads all three assets only after the release-write job
+  confirms the release is still a draft.
 - Preparation separates read-only build work from release-write access and
   attests the build outputs.
 - Published-release PyPI publishing requires the expected immutable assets and
