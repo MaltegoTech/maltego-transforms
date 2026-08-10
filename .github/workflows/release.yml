@@ -6,24 +6,24 @@ on:
   workflow_dispatch:
     inputs:
       publish-target:
-        description: Publish target for manual runs
+        description: Publish target for manual validation runs
         type: choice
         required: true
         default: testpypi
         options:
           - testpypi
-          - pypi
 
 permissions:
   contents: read
 
 jobs:
-  build:
+  build-testpypi:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish-target == 'testpypi'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v7
         with:
@@ -44,33 +44,17 @@ jobs:
       - name: Build wheel + sdist
         run: poetry build
 
-      - name: Generate CycloneDX SBOM
-        run: |
-          mkdir -p dist/sbom
-          poetry run python resources/generate_sbom.py --output dist/sbom/maltego-transforms-sbom.cdx.json
-
       - uses: actions/upload-artifact@v7
         with:
           name: dist-packages
           path: |
             dist/*.whl
             dist/*.tar.gz
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: dist-sbom
-          path: dist/sbom/maltego-transforms-sbom.cdx.json
-
-      - name: Attach wheel + sdist + SBOM to the GitHub Release
-        if: github.event_name == 'release'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" dist/*.whl dist/*.tar.gz dist/sbom/maltego-transforms-sbom.cdx.json --clobber
+          retention-days: 7
 
   publish-testpypi:
     runs-on: ubuntu-latest
-    needs:
-      - build
+    needs: build-testpypi
     if: github.event_name == 'workflow_dispatch' && inputs.publish-target == 'testpypi'
     permissions:
       id-token: write
@@ -90,21 +74,66 @@ jobs:
           skip-existing: true
 
   publish-pypi:
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
-    needs:
-      - build
-    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.publish-target == 'pypi')
     permissions:
+      contents: read
+      attestations: read
       id-token: write
     environment:
       name: pypi
+    concurrency:
+      group: release-${{ github.event.release.tag_name }}
+      cancel-in-progress: false
+    env:
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
     steps:
-      - uses: actions/download-artifact@v8
-        with:
-          name: dist-packages
-          path: dist/
+      - name: Download published release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release-assets
+          gh release download "$RELEASE_TAG" --dir release-assets \
+            --pattern '*.whl' \
+            --pattern '*.tar.gz' \
+            --pattern 'maltego-transforms-sbom.cdx.json'
+
+      - name: Verify immutable release asset set
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "$RELEASE_TAG" --json isImmutable --jq '.isImmutable' | grep -qx true; then
+            echo "Refusing to publish assets from a mutable release."
+            exit 1
+          fi
+
+          shopt -s nullglob
+          wheels=(release-assets/*.whl)
+          sdists=(release-assets/*.tar.gz)
+          sbom=release-assets/maltego-transforms-sbom.cdx.json
+          if [ "${#wheels[@]}" -ne 1 ] || [ "${#sdists[@]}" -ne 1 ] || [ ! -f "$sbom" ]; then
+            echo "Expected exactly one wheel, one sdist, and one SBOM."
+            exit 1
+          fi
+
+          mkdir -p dist
+          cp "${wheels[0]}" "${sdists[0]}" dist/
+
+      - name: Verify release build provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for asset in release-assets/*.whl release-assets/*.tar.gz release-assets/maltego-transforms-sbom.cdx.json; do
+            gh attestation verify "$asset" \
+              --repo "$GH_REPO" \
+              --signer-workflow MaltegoTech/maltego-transforms/.github/workflows/prepare-release.yml \
+              --source-ref refs/heads/main \
+              --source-digest "$GITHUB_SHA"
+          done
 
       - name: Publish release distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
+          skip-existing: true
