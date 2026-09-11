@@ -8,15 +8,21 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 BENCHMARK_SCRIPT = REPO_ROOT / "benchmarks" / "fastapi_serialization.py"
 
 
+_BENIGN_DEPRECATIONS = ("StarletteDeprecationWarning", "AuthlibDeprecationWarning")
+
+
 def _stderr_without_starlette_deprecation(stderr: str) -> str:
-    """Drop the benign StarletteDeprecationWarning (httpx/testclient) emitted at
+    """Drop benign deprecation warnings (httpx/testclient, authlib.jose) emitted at
     import time so a genuine error/traceback still fails the test."""
     kept: list[str] = []
     lines = stderr.splitlines()
     i = 0
     while i < len(lines):
-        if "StarletteDeprecationWarning" in lines[i]:
+        if any(marker in lines[i] for marker in _BENIGN_DEPRECATIONS):
             i += 1
+            # skip any further message-continuation lines (unindented)
+            while i < len(lines) and lines[i] and not lines[i][0].isspace():
+                i += 1
             if i < len(lines) and (lines[i].startswith(" ") or lines[i].startswith("\t")):
                 i += 1  # skip the source-echo line that follows the warning
             continue

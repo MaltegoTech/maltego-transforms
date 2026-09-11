@@ -2126,7 +2126,9 @@ def mock_server_example() -> MaltegoTransformServer:  # type: ignore
 
 @pytest.fixture
 def async_client_mock_server(mock_server: MaltegoTransformServer) -> httpx.AsyncClient:
-    client = httpx.AsyncClient(app=mock_server.app, base_url="http://test")
+    client = httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=mock_server.app), base_url="http://test"
+    )
     return client
 
 
@@ -2134,7 +2136,9 @@ def async_client_mock_server(mock_server: MaltegoTransformServer) -> httpx.Async
 def async_client_example_server(
     mock_server_example: MaltegoTransformServer,
 ) -> httpx.AsyncClient:
-    client = httpx.AsyncClient(app=mock_server_example.app, base_url="http://test")
+    client = httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=mock_server_example.app), base_url="http://test"
+    )
     return client
 
 
