@@ -14,3 +14,22 @@ updates:
           - "*"
     commit-message:
       prefix: chore
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 10
+    groups:
+      pip-dev:
+        dependency-type: development
+        patterns:
+          - "*"
+      pip-production:
+        dependency-type: production
+        patterns:
+          - "*"
+    commit-message:
+      prefix: chore
