@@ -90,7 +90,7 @@ tracing = [
 ]
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^8"
+pytest = ">=8,<10"
 pytest-asyncio = ">=0,<2"
 pytest-cov = ">=4,<8"
 xmltodict = ">=0,<2"
