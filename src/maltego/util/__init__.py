@@ -221,7 +221,9 @@ class IntegrationClient:
         if proxies is not None:
             if isinstance(proxies, dict):
                 client_kwargs["mounts"] = {
-                    pattern: httpx.AsyncHTTPTransport(proxy=url)
+                    pattern: httpx.AsyncHTTPTransport(
+                        proxy=url, verify=self.verify_ssl, trust_env=trust_env
+                    )
                     for pattern, url in proxies.items()
                 }
             else:
