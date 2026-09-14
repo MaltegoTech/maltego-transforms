@@ -2,6 +2,9 @@
 import base64
 import json
 from typing import Any, Dict, List, Union, Optional, Sequence
+# authlib.jose is deprecated in favor of joserfc (already used elsewhere in this
+# codebase); left as-is here since this is a security-sensitive decrypt path
+# that deserves its own reviewed migration, not a drive-by dependency-bump fix.
 from authlib.jose import JsonWebEncryption
 from Crypto import Random
 from Crypto.Cipher import PKCS1_v1_5, AES

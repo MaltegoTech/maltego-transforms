@@ -5,7 +5,6 @@ from asyncio.tasks import Task
 import logging
 from contextlib import suppress
 from urllib.parse import urlparse
-import inspect
 import httpx
 from httpx import Response, Headers
 from httpx._types import ProxyTypes
@@ -220,10 +219,15 @@ class IntegrationClient:
             "follow_redirects": False,
         }
         if proxies is not None:
-            if "proxy" in inspect.signature(httpx.AsyncClient.__init__).parameters:
-                client_kwargs["proxy"] = proxies
+            if isinstance(proxies, dict):
+                client_kwargs["mounts"] = {
+                    pattern: httpx.AsyncHTTPTransport(
+                        proxy=url, verify=self.verify_ssl, trust_env=trust_env
+                    )
+                    for pattern, url in proxies.items()
+                }
             else:
-                client_kwargs["proxies"] = proxies
+                client_kwargs["proxy"] = proxies
         return httpx.AsyncClient(**client_kwargs)
 
     async def __response_hook(
