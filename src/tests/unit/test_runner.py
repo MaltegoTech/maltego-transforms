@@ -24,10 +24,12 @@ from maltego.model.event import (
 from maltego.model.exception import MaltegoTransformTimeoutError
 from maltego.model.graph import MaltegoGraph
 from maltego.model.link import MaltegoLink
+from maltego.model.transform import MaltegoTransform
 from maltego.model.types import ExecutionState
 from maltego.middlewares.middlewares import TransformMiddleware
 from maltego.runner import ThreadedTransformRunner, TransformRunner
 from maltego.runner.transform_execution_context import (
+    MultiplexedTransformExecutionContext,
     MultiplexedTransformResultSet,
     TransformExecutionContext,
     TransformGraphObserver,
@@ -1023,3 +1025,97 @@ def test_multiplexed_ends_mid_composite_delegates_to_child():
     # boundary 1 is the clean seam between rs_a and rs_b (next is rs_b's atomic
     # input entity, not a composite continuation).
     assert mux.ends_mid_composite(1) is False
+
+
+def test_multiplexed_keeps_event_added_during_collection():
+    first = create_mock_entity_add_event(MockEntity("first"))
+    late = create_mock_entity_add_event(MockEntity("late"))
+
+    class GrowingOutput(list):
+        def __getitem__(self, index):
+            batch = super().__getitem__(index)
+            if isinstance(index, slice) and len(self) == 1:
+                self.append(late)
+            return batch
+
+    child = _new_result_set()
+    child.output = GrowingOutput([first])
+    mux = MultiplexedTransformResultSet([child])
+
+    first_page = mux.get_results()[:1]
+    second_page = mux.get_results()[1:]
+
+    assert first_page + second_page == [first, late]
+
+
+def _multiplexed_run(statuses: dict[str, int]) -> MultiplexedTransformExecutionContext:
+    """Multi-input run where a 404 input logs a warning and returns nothing, a 200 returns a composite."""
+
+    async def get_profile(
+        input_entity: AtomicInput, settings: dict, limit: int, context: MaltegoContext
+    ) -> list[CompositeParent]:
+        value = input_entity.input_value
+        if statuses[value] == 404:
+            context.log.partial(f"not found: {value}")
+            return []
+        parent = CompositeParent(f"parent-{value}")
+        parent.parent_value = f"parent-{value}"
+        parent.primary_child = CompositeChild(f"primary-{value}")
+        parent.secondary_child = CompositeChild(f"secondary-{value}")
+        return [parent]
+
+    transform = MaltegoTransform(
+        impl=get_profile, name="get_profile", display_name="x", description="x",
+        settings=[], transform_ns="test", composite_entities=True,
+    )
+    inputs = []
+    for value in statuses:
+        entity = AtomicInput(value)
+        entity.input_value = value
+        inputs.append(entity)
+    mock_request = MagicMock()
+    mock_request.headers = {}
+    context = MaltegoContext(MaltegoGraph(entities=inputs), mock_request, v3_request=True)
+    return MultiplexedTransformExecutionContext(
+        "test-run", transform, tuple(inputs), {}, context, 12, 60, 60,
+    )
+
+
+def _label(event) -> str:
+    if isinstance(event, TransformEntityEvent):
+        return event.entity.get_property(event.entity.Config.value_property)
+    if isinstance(event, TransformMessageEvent):
+        return event.message
+    return type(event).__name__
+
+
+@pytest.mark.asyncio
+async def test_multiplexed_results_page_by_position_without_drops_or_repeats():
+    """A client paging get_results()[ptr:] between inputs must see every event exactly once."""
+    mux = _multiplexed_run({"a": 404, "b": 404, "c": 200, "d": 404})
+
+    pointer, served = 0, []
+    for ctx in mux.contexts:
+        await ctx.start()
+        page = mux.result.get_results()[pointer:]
+        served += page
+        pointer += len(page)
+
+    final = mux.result.get_results()
+    assert [_label(e) for e in served] == [_label(e) for e in final]
+    assert len({id(e) for e in served}) == len(served), "an event was served twice"
+    served_labels = {_label(e) for e in served}
+    assert {"parent-c", "primary-c", "secondary-c"} <= served_labels
+    assert mux.result.event_count == len(final)
+
+
+@pytest.mark.asyncio
+async def test_multiplexed_logs_land_with_their_input():
+    mux = _multiplexed_run({"a": 404, "b": 200, "c": 404})
+    await mux.start()
+
+    messages = [
+        [e.message for e in ctx.result.get_results() if isinstance(e, TransformMessageEvent)]
+        for ctx in mux.contexts
+    ]
+    assert messages == [["not found: a"], [], ["not found: c"]]

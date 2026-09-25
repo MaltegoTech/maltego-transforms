@@ -170,7 +170,8 @@ class TransformResultSet:
             and event.entity.is_composite_instance
         )
 
-    def _continues_composite(self, event: TransformEvent) -> bool:
+    @staticmethod
+    def _continues_composite(event: TransformEvent) -> bool:
         """Whether ``event`` *continues* an in-progress composite group.
 
         True iff ``event`` is a composite-child entity ADD or a composite link

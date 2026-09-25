@@ -40,12 +40,30 @@ class MultiplexedTransformResultSet:
 
     def __init__(self, results: Iterable[TransformResultSet]):
         self.results = tuple(results)
+        self.output: List[TransformEvent] = []
+        self._taken = [0] * len(self.results)
+
+    def __gather(self) -> List[TransformEvent]:
+        # Only advance past events we copied.
+        for index, result in enumerate(self.results):
+            if result.event_count > self._taken[index]:
+                new_events = result.output[self._taken[index]:]
+                self.output.extend(new_events)
+                self._taken[index] += len(new_events)
+        return self.output
 
     def get_added_entities(self) -> List[MaltegoEntity]:
-        return list(flatten(r.get_added_entities() for r in self.results))
+        return [
+            event.entity
+            for event in self.__gather()
+            if isinstance(event, TransformEntityEvent) and event.operation_type == TransformEventOperationType.ADD
+        ]
 
     def get_results(self) -> List[TransformEvent]:
-        return list(flatten(r.get_results() for r in self.results))
+        now = datetime.now()
+        for result in self.results:
+            result.last_fetch_time = now
+        return self.__gather()
 
     def get_response_headers(self) -> dict[str, str]:
         response_headers: dict[str, str] = {}
@@ -63,7 +81,7 @@ class MultiplexedTransformResultSet:
 
     @property
     def event_count(self) -> int:
-        return sum(r.event_count for r in self.results)
+        return len(self.__gather())
 
     @property
     def atomic_entity_count(self) -> int:
@@ -74,24 +92,11 @@ class MultiplexedTransformResultSet:
         return sum(r.composite_entity_count for r in self.results)
 
     def ends_mid_composite(self, boundary_index: int) -> bool:
-        """Whether the flattened output ends mid-composite at ``boundary_index``.
-
-        ``get_results()`` flattens the child result sets by concatenation, so a
-        composite group never straddles two children (each child's output is
-        whole within itself). We therefore locate which child the boundary
-        falls into and delegate to that child's ``ends_mid_composite`` using the
-        child-local boundary index, keeping the semantics consistent with the
-        flattening.
-        """
-        if boundary_index <= 0:
+        """Same forward rule as ``TransformResultSet.ends_mid_composite``, applied to the merged output."""
+        output = self.__gather()
+        if boundary_index <= 0 or boundary_index >= len(output):
             return False
-        offset = boundary_index
-        for result in self.results:
-            length = result.event_count
-            if offset < length:
-                return result.ends_mid_composite(offset)
-            offset -= length
-        return False
+        return TransformResultSet._continues_composite(output[boundary_index])  # pylint: disable=protected-access
 
     @property
     def state(self) -> ExecutionState:
@@ -172,7 +177,7 @@ class MultiplexedTransformExecutionContext:
                 transform,
                 transform_input,
                 transform_settings,
-                context,
+                context.for_input(),
                 limit,
                 transform_execution_timeout,
                 middleware_execution_timeout,
