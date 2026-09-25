@@ -81,8 +81,9 @@ We welcome AI-assisted contributions. Please:
 
 - Review and understand the code before submitting — you are accountable for
   what you submit, not your tool.
-- Use a PRP for non-trivial AI-assisted changes before editing code; see
-  `runbooks/using-prps.md` and `prps/templates/prp_base.md`.
+- Use a PRP or OpenSpec change for non-trivial AI-assisted changes before
+  editing code. See `runbooks/structured-planning.md`, `prps/templates/prp_base.md`,
+  and `openspec/README.md`.
 - Write a clear PR description in your own words.
 - Run the tests yourself; do not rely on the AI to verify correctness.
 
@@ -97,10 +98,12 @@ This repository does not contain the documentation source.
 ## Submitting a pull request
 
 1. Fork the repository and create a feature branch off `main`.
-2. For non-trivial changes, write or update a PRP under `prps/` **before**
-   editing code. Use `runbooks/using-prps.md` and `prps/templates/prp_base.md`
-   as your guide. One-line fixes that do not change behavior, public API,
-   packaging, release flow, or generated project output can skip this step.
+2. For non-trivial changes, write or update a PRP under `prps/` **or** create
+   an OpenSpec change under `openspec/changes/` **before** editing code. Use
+   `runbooks/structured-planning.md`, `prps/templates/prp_base.md`, or
+   `openspec/README.md` as your guide. One-line fixes that do not change
+   behavior, SDK API, packaging, release flow, or generated project output
+   can skip this step.
 3. Make your change with tests.
 4. Ensure `poetry run pytest` passes and `ruff check` is clean.
 5. Update `CHANGELOG.md` under an `Unreleased` heading for any user-facing

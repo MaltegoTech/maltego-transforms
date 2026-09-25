@@ -21,7 +21,7 @@ Guidance for AI coding agents working in **`maltego-transforms`** — a Python S
 | `src/maltego/template_dir/` | The example-rich starter project (`maltego-transforms start` copies this) |
 | `src/maltego/skills_assets/` | The provider-agnostic agent skills shipped by `--with-skills` |
 | `src/tests/` | Tests, grouped by pytest markers (see below) |
-| `runbooks/` | Operational guides for repeatable work such as PRPs and test runs |
+| `runbooks/` | Operational guides for repeatable work such as structured planning and test runs |
 
 Full documentation (quickstart, setup, entity features, pagination, migration, …) is published online from the Maltego Transforms SDK overview at https://docs.maltego.com/en/support/solutions/articles/15000062349-maltego-transforms-sdk-overview — this repository does not contain the documentation source.
 
@@ -120,9 +120,21 @@ The focused skills: `maltego-transform-design` (model a new data source), `malte
 - `poetry run pytest` (scope with markers) — a green suite is the requirement. `pylint`/`mypy` are advisory (see above), not required to be clean.
 - Start the server (`python project.py`) and confirm your transform appears in `GET /api/v3/transforms` with the expected input/output types. A missing transform or output type almost always means a missing/untyped annotation.
 - Use the relevant runbook when the repo has one for the workflow, especially
-  `runbooks/run-tests.md` for test selection and `runbooks/using-prps.md` for
+  `runbooks/run-tests.md` for test selection and `runbooks/structured-planning.md` for
   non-trivial changes.
 
-## Structured planning with PRPs
+## Structured planning: PRPs or OpenSpec
 
-For non-trivial SDK work (a new feature, a migration, a cross-cutting change), a short **PRP** (a structured requirement/planning prompt) is required *before* editing code. A good PRP dramatically reduces hallucinated APIs and rework. See `runbooks/using-prps.md` and start from `prps/templates/prp_base.md`. In short, a PRP states: the **why** (background + rejected approaches), explicit **scope / non-goals**, the **files to touch** (located by symbol, not brittle line numbers), a **test matrix**, **verification commands**, and a **definition of done**. Only one-line fixes that do not change behavior, public API, packaging, release flow, or generated project output can skip a PRP.
+For non-trivial SDK work (a new feature, a migration, a cross-cutting change),
+complete either a **PRP** or an **OpenSpec change** before editing code. Both
+formats must be portable and precise about behavior, scope, validation,
+and compatibility.
+
+- Use a PRP when an implementation-ready plan will guide the work. Follow
+  `runbooks/structured-planning.md` and start from `prps/templates/prp_base.md`.
+- Use OpenSpec when the change benefits from an evolving behavioral contract.
+  Keep source-of-truth specifications in `openspec/specs/` and proposed work in
+  `openspec/changes/`; see `openspec/README.md`.
+
+Only one-line fixes that do not change behavior, SDK API, packaging, release
+flow, or generated project output can skip both planning formats.

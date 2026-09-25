@@ -1,0 +1,52 @@
+name: sdk
+version: 1
+description: Shared SDK change workflow with conditional specs and design
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: Concise change brief and artifact decision
+    template: proposal.md
+    instruction: >
+      Create this for every change. State the outcome, scope, non-goals, and
+      verification evidence. Record whether specs and design are required. A
+      contract change always requires both; a toolchain or generated-project
+      migration always requires design.
+    requires: []
+  - id: specs
+    generates: specs/**/*.md
+    description: Conditional observable SDK requirements and scenarios
+    template: specs/spec.md
+    instruction: >
+      Create only when the change alters an observable SDK behavior, including
+      protocol, discovery, serialized output, errors, headers, capabilities, or
+      generated-project outcomes. Define complete requirements and testable
+      scenarios. If no spec-level behavior changes, set skip_specs: true in the
+      change's .openspec.yaml and do not create this artifact.
+    requires:
+      - proposal
+  - id: design
+    generates: design.md
+    description: Conditional compatibility or migration decision record
+    template: design.md
+    instruction: >
+      Create only when a decision needs to outlive the implementation tasks. It
+      is required for a contract change and for a dependency, packaging, or
+      generated-project migration. Explain the compatibility or migration path,
+      alternatives, and focused proof. Otherwise, do not create this artifact.
+    requires:
+      - proposal
+  - id: tasks
+    generates: tasks.md
+    description: Focused implementation and verification checklist
+    template: tasks.md
+    instruction: >
+      Create this for every change. Sequence focused tests before implementation
+      and include only the relevant unit, integration, contract, template,
+      packaging, or security verification. Reconcile applicable specs and
+      design decisions before completion.
+    requires:
+      - proposal
+apply:
+  requires:
+    - tasks
+  tracks: tasks.md

@@ -79,8 +79,9 @@ This scaffolds a runnable project with example transforms covering the most comm
 ## Runbooks
 
 Repository runbooks live in [`runbooks/`](runbooks/) and capture repeatable
-workflows for contributors and coding agents, including writing PRPs for
-non-trivial changes and choosing the right test command.
+workflows for contributors and coding agents, including
+[structured planning](runbooks/structured-planning.md) for non-trivial changes
+and choosing the right test command.
 
 ## Features
 

@@ -48,7 +48,8 @@ from maltego.protocol.v3.execution.transform_run import (
     TransformRunResult, TransformRunResultSummary, TransformRunExecutionContext
 )
 from maltego.server.capability_matrix import CapabilityNegotiator, ClientType, NegotiationContext, ResolvedCapabilitiesSet
-from maltego.server.util import MALTEGO_PROTOCOL_VERSION_3_2, set_entities_added_header, \
+from maltego.server.util import MALTEGO_PROTOCOL_VERSION_3_1, MALTEGO_PROTOCOL_VERSION_3_3, \
+    get_supported_protocol_version, set_entities_added_header, \
     set_run_duration_header, \
     set_state_header, \
     set_protocol_version_header, set_vary_headers
@@ -660,6 +661,7 @@ class V3Server:
         self,
         resolved: Optional[ResolvedCapabilitiesSet] = None,
         negotiator: Optional[CapabilityNegotiator] = None,
+        protocol_version: str = MALTEGO_PROTOCOL_VERSION_3_1,
     ) -> list[V3EntityDefinition]:
         comp_allowed = resolved.composite_entities if resolved else True
         flat_allowed = resolved.flattened_composite_entities if resolved else False
@@ -685,6 +687,9 @@ class V3Server:
                     client_type,
                     self._override_index,
                 )
+                if protocol_version != MALTEGO_PROTOCOL_VERSION_3_3:
+                    entity_def.variant_property = None
+                    entity_def.variant_icon_property = None
 
                 # Layer 2: Coalesce capability check (after overrides)
                 if negotiator is not None and not negotiator.supports_coalesce():
@@ -710,6 +715,9 @@ class V3Server:
                 client_type,
                 self._override_index,
             )
+            if protocol_version != MALTEGO_PROTOCOL_VERSION_3_3:
+                entity_def.variant_property = None
+                entity_def.variant_icon_property = None
 
             # Layer 2: Coalesce capability check for composite entities
             if negotiator is not None and not negotiator.supports_coalesce():
@@ -787,7 +795,8 @@ class V3Server:
                               maltego_client_identifier: typing.Annotated[str | None, fastapi.Header()] = None,
                               user_agent: typing.Annotated[str | None, fastapi.Header()] = None,
                               ) -> List[V3EntityDefinition]:
-        set_protocol_version_header(response, maltego_protocol_version)
+        protocol_version = get_supported_protocol_version(maltego_protocol_version, self._settings)
+        set_protocol_version_header(response, protocol_version)
         set_vary_headers(response)
 
         ua = MaltegoUserAgent(user_agent)
@@ -800,7 +809,7 @@ class V3Server:
         )
         negotiator = CapabilityNegotiator(nctx) if nctx.should_negotiate() else None
         resolved = negotiator.resolved if negotiator else None
-        return self._to_proto_entities(resolved, negotiator=negotiator)
+        return self._to_proto_entities(resolved, negotiator=negotiator, protocol_version=protocol_version)
 
     async def assets_icons(self,
                            response: fastapi.Response,
@@ -856,7 +865,8 @@ class V3Server:
                      maltego_client_identifier: typing.Annotated[str | None, fastapi.Header()] = None,
                      user_agent: typing.Annotated[str | None, fastapi.Header()] = None,
                      ) -> V3AssetResponse:
-        set_protocol_version_header(response, maltego_protocol_version)
+        protocol_version = get_supported_protocol_version(maltego_protocol_version, self._settings)
+        set_protocol_version_header(response, protocol_version)
         set_vary_headers(response)
 
         ua = MaltegoUserAgent(user_agent)
@@ -872,7 +882,11 @@ class V3Server:
         response.headers["maltego-transform-supported-oauth-formats"] = "jwe"
 
         return V3AssetResponse(
-            entities=self._to_proto_entities(resolved, negotiator=negotiator),
+            entities=self._to_proto_entities(
+                resolved,
+                negotiator=negotiator,
+                protocol_version=protocol_version,
+            ),
             icons=self._to_proto_icons(),
             machines=self._to_proto_machines(negotiator=negotiator),
             transform_sets=self._to_proto_transform_sets(),
@@ -1600,7 +1614,7 @@ class V3Server:
         :return: List of capabilities that can be used in `maltego-client-capabilities` header.
         """
         return V3SupportedCapabilitiesResponse(
-            protocol=MALTEGO_PROTOCOL_VERSION_3_2,
+            protocol=MALTEGO_PROTOCOL_VERSION_3_3,
             supported_capabilities=[
                 V3SupportedCapability(
                     name=capability.value,

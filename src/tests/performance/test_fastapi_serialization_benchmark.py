@@ -10,6 +10,7 @@ BENCHMARK_SCRIPT = REPO_ROOT / "benchmarks" / "fastapi_serialization.py"
 
 _BENIGN_DEPRECATIONS = ("StarletteDeprecationWarning", "AuthlibDeprecationWarning")
 _MAX_CONTINUATION_LINES = 3  # bound how much unindented text we treat as part of one warning
+_FAILURE_MARKERS = ("Traceback (most recent call last)", "Error", "Exception")
 
 
 def _stderr_without_starlette_deprecation(stderr: str) -> str:
@@ -29,6 +30,7 @@ def _stderr_without_starlette_deprecation(stderr: str) -> str:
                 and lines[i]
                 and not lines[i][0].isspace()
                 and skipped < _MAX_CONTINUATION_LINES
+                and not any(marker in lines[i] for marker in _FAILURE_MARKERS)
             ):
                 i += 1
                 skipped += 1
@@ -38,6 +40,12 @@ def _stderr_without_starlette_deprecation(stderr: str) -> str:
         kept.append(lines[i])
         i += 1
     return "\n".join(kept).strip()
+
+
+def test_stderr_filter_keeps_failure_after_deprecation_warning() -> None:
+    stderr = "StarletteDeprecationWarning: benign\nRuntimeError: benchmark failed"
+
+    assert _stderr_without_starlette_deprecation(stderr) == "RuntimeError: benchmark failed"
 
 
 def test_fastapi_serialization_benchmark_emits_required_json(tmp_path: Path) -> None:

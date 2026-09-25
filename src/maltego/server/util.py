@@ -9,7 +9,8 @@ from maltego.model.types import ExecutionState
 
 MALTEGO_PROTOCOL_VERSION_3_1 = "3.1"
 MALTEGO_PROTOCOL_VERSION_3_2 = "3.2"
-DEFAULT_PROTOCOL_VERSION = MALTEGO_PROTOCOL_VERSION_3_1
+MALTEGO_PROTOCOL_VERSION_3_3 = "3.3"
+DEFAULT_PROTOCOL_VERSION = MALTEGO_PROTOCOL_VERSION_3_3
 
 # in case the discovery results get cached, we should return Vary headers
 # to ensure the cache is invalidated when the client capabilities change
@@ -92,5 +93,7 @@ def get_supported_protocol_version(client_version: Optional[str], settings: Malt
         server_protocol_version = MALTEGO_PROTOCOL_VERSION_3_1
     if client_version == MALTEGO_PROTOCOL_VERSION_3_2:
         server_protocol_version = MALTEGO_PROTOCOL_VERSION_3_2
+    if client_version == MALTEGO_PROTOCOL_VERSION_3_3:
+        server_protocol_version = MALTEGO_PROTOCOL_VERSION_3_3
 
     return server_protocol_version

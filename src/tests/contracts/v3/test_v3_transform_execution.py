@@ -328,7 +328,7 @@ async def test_prompt_response_keeps_protocol_and_state_headers(
     )
 
     assert result.status_code == 204
-    assert result.headers["maltego-protocol-version"] == "3.1"
+    assert result.headers["maltego-protocol-version"] == "3.3"
     assert result.headers["maltego-run-state"] == ExecutionState.COMPLETED.value
 
 

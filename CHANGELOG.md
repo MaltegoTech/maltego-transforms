@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 1.1.0 - 2026-09-25
+
+### Added
+
+- Entity definitions can declare optional `variant_property` and `variant_icon_property` references. Protocol 3.3 discovery returns them as `variantProperty` and `variantIconProperty` when configured; earlier protocol versions omit them.
+
 ## 1.0.1 - 2026-08-07
 
 ### Fixed

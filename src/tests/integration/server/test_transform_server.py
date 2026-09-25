@@ -89,7 +89,7 @@ def test_default_server_keeps_seed_bridge_without_classic_runner(
     assert no_protocol_seed_response.headers["content-type"].startswith(
         "application/json"
     )
-    assert no_protocol_seed_response.headers["maltego-protocol-version"] == "3.1"
+    assert no_protocol_seed_response.headers["maltego-protocol-version"] == "3.3"
     assert no_protocol_seed_response.json()["TransformApplications"][0]["URL"] == "https://maltoso.com/pytest"
     assert _v3_url(no_protocol_seed_response) == "https://maltoso.com/pytest"
     assert client.get("/pytest/runner?Command=_TRANSFORMS").status_code == 404
@@ -937,7 +937,7 @@ def test_response_compression_disabled_by_default(
 
     assert response.status_code == 200
     assert response.headers.get("content-encoding") is None
-    assert response.headers["maltego-protocol-version"] == "3.1"
+    assert response.headers["maltego-protocol-version"] == "3.3"
     assert response.headers["maltego-transform-supported-oauth-formats"] == "jwe"
 
 
@@ -965,7 +965,7 @@ def test_response_compression_gzips_large_json_when_enabled() -> None:
     assert response.status_code == 200
     assert response.headers.get("content-encoding") == "gzip"
     assert "accept-encoding" in response.headers.get("vary", "").lower()
-    assert response.headers["maltego-protocol-version"] == "3.1"
+    assert response.headers["maltego-protocol-version"] == "3.3"
     assert response.headers["maltego-transform-supported-oauth-formats"] == "jwe"
 
 
@@ -1024,7 +1024,7 @@ def test_response_compression_respects_accept_encoding_identity() -> None:
     server.runner.shutdown()
     assert response.status_code == 200
     assert response.headers.get("content-encoding") is None
-    assert response.headers["maltego-protocol-version"] == "3.1"
+    assert response.headers["maltego-protocol-version"] == "3.3"
     assert response.headers["maltego-transform-supported-oauth-formats"] == "jwe"
 
 
@@ -1050,7 +1050,7 @@ def test_response_compression_does_not_compress_without_accept_encoding_header()
     server.runner.shutdown()
     assert response.status_code == 200
     assert response.headers.get("content-encoding") is None
-    assert response.headers["maltego-protocol-version"] == "3.1"
+    assert response.headers["maltego-protocol-version"] == "3.3"
     assert response.headers["maltego-transform-supported-oauth-formats"] == "jwe"
 
 
