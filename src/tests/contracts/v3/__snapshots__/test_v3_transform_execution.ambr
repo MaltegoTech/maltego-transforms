@@ -24887,8 +24887,8 @@
               'statusMessage': dict({
                 'code': 0,
                 'progress': 0.0,
-                'state': 'FAILED',
-                'text': 'Mismatch between request metadata and actual content',
+                'state': 'INITIALIZED',
+                'text': 'Metadata validation failed',
                 'type': 'ERROR',
               }),
             }),
@@ -24901,8 +24901,8 @@
               'statusMessage': dict({
                 'code': 0,
                 'progress': 0.0,
-                'state': 'INITIALIZED',
-                'text': 'Metadata validation failed',
+                'state': 'FAILED',
+                'text': 'Mismatch between request metadata and actual content',
                 'type': 'ERROR',
               }),
             }),

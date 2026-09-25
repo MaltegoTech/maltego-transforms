@@ -1,4 +1,5 @@
 # Copyright (c) Maltego Technologies GmbH.
+import copy
 import functools
 import uuid
 from enum import Enum
@@ -472,6 +473,14 @@ class MaltegoContext:
         self.auth_credential_header = self.auth_context.credential_header
         self.auth_upstream_identity_method = self.auth_context.upstream_identity_method
         self.upstream_exceptions: List[Exception] = []
+
+    def for_input(self) -> "MaltegoContext":
+        """Per-input copy for a multi-input run; shares request and graph, owns log, prompt and upstream exceptions."""
+        child = copy.copy(self)
+        child.log = LogCollector()
+        child._prompt = Prompt()
+        child.upstream_exceptions = []
+        return child
 
     def set_log_queue(self, log_queue: Queue[Any]) -> None:
         self.log.set_log_queue(log_queue)
