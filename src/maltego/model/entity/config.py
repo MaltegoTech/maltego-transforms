@@ -46,9 +46,13 @@ class MaltegoEntityConfig:
             display_key: Optional[str] = None,
             _visible: bool = True,
             converter: Optional[MaltegoEntityRegexConverter] = None,
-            actions: Optional[List[MaltegoEntityAction]] = None
+            actions: Optional[List[MaltegoEntityAction]] = None,
+            variant_property: Optional[str] = None,
+            variant_icon_property: Optional[str] = None,
     ):
         self.value_property = str(value_property) if value_property is not None else None
+        self.variant_property = str(variant_property) if variant_property is not None else None
+        self.variant_icon_property = str(variant_icon_property) if variant_icon_property is not None else None
         self.value_key = str(value_key) if value_key is not None else None
         self.display_name = str(display_name)
         self._description = str(description) if description is not None else None
@@ -94,6 +98,8 @@ class MaltegoEntityConfig:
     def copy(self) -> "MaltegoEntityConfig":
         config = MaltegoEntityConfig(
             value_property=self.value_property,
+            variant_property=self.variant_property,
+            variant_icon_property=self.variant_icon_property,
             display_name=self.display_name,
             description=self._description,
             category=self._category,
@@ -114,6 +120,8 @@ class MaltegoEntityConfig:
     def merge_with(self, other: "MaltegoEntityConfig") -> "MaltegoEntityConfig":
         merged = MaltegoEntityConfig(
             value_property=self.value_property or other.value_property,
+            variant_property=self.variant_property or other.variant_property,
+            variant_icon_property=self.variant_icon_property or other.variant_icon_property,
             value_key=self.value_key or other.value_key,
             display_name=self.display_name or other.display_name,
             display_name_plural=self._display_name_plural or other._display_name_plural,  # pylint: disable=protected-access

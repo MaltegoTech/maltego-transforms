@@ -2,6 +2,7 @@
 # pylint: disable=protected-access
 import time
 import pathlib
+import typing
 import pytest
 import asyncio
 import toml
@@ -49,6 +50,16 @@ def test_version_in_sync():
     assert toml_version
     assert init_version
     assert toml_version == init_version
+
+
+def test_integration_client_proxy_annotation_supports_pattern_mapping():
+    proxies_annotation = IntegrationClient.__init__.__annotations__["proxies"]
+
+    assert any(
+        typing.get_origin(option) is dict
+        and typing.get_args(option)[0] is str
+        for option in typing.get_args(proxies_annotation)
+    )
 
 
 @pytest.mark.integration

@@ -1,0 +1,38 @@
+schema: sdk
+context: |
+  maltego-transforms is a Python SDK for authoring asynchronous Maltego
+  transform servers. Support Python 3.10 through 3.14 and preserve SDK API,
+  wire compatibility, generated-project behavior, and existing transform
+  discovery contracts.
+
+  Planning artifacts are repository content. Use repository-verifiable context,
+  workspace-relative paths, and reproducible tooling.
+  Keep implementation detail in design and task artifacts unless it is part of
+  the observable SDK contract.
+rules:
+  proposal:
+    - State the user-visible behavior, compatibility expectations, scope, and
+      non-goals.
+    - State whether a spec delta or design is needed, and why.
+    - Identify the verification evidence required to complete the change.
+  specs:
+    - When present, express observable SDK behavior using requirements and
+      scenarios.
+    - Preserve unchanged behavior explicitly when compatibility matters.
+  design:
+    - When present, reference existing symbols and patterns before introducing
+      new ones.
+    - Record compatibility or migration decisions that an implementation task
+      alone cannot convey.
+  tasks:
+    - Include focused tests first, then the relevant unit, integration, contract,
+      template, packaging, or security checks.
+operations:
+  apply:
+    guidance:
+      - Reconfirm referenced symbols and tests before implementation.
+      - Keep generated starter projects and documentation aligned when
+        behavior changes.
+  archive:
+    guidance:
+      - Sync accepted behavioral changes into openspec/specs before archiving.

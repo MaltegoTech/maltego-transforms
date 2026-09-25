@@ -3,6 +3,8 @@ import typing
 from typing import Any
 import pytest
 import httpx
+from maltego.model.entity import MaltegoEntity, MaltegoEntityConfig
+from maltego.model.entity.property import MEF
 from tests.conftest import NAMESPACE, PREFIX, UA_4_10_0, UA_9_9_9, GRAPH_BROWSER_3_0_0
 
 pytestmark = pytest.mark.contract
@@ -23,6 +25,87 @@ def _strip_blobs(data: Any) -> Any:
     if isinstance(data, list):
         return [_strip_blobs(item) for item in data]
     return data
+
+
+def test_v3_entity_definition_serializes_independent_variant_metadata() -> None:
+    class VariantEntity(MaltegoEntity):
+        TYPE_NAME = "test.VariantEntity"
+        Config = MaltegoEntityConfig(
+            value_property="value",
+            display_name="Variant Entity",
+            icon_resource="Phrase",
+            variant_property="variant.kind",
+            variant_icon_property="variant.icon",
+        )
+        value: str = MEF(name="value", display_name="Value")
+
+    class PlainEntity(MaltegoEntity):
+        TYPE_NAME = "test.PlainEntity"
+        Config = MaltegoEntityConfig(
+            value_property="value",
+            display_name="Plain Entity",
+            icon_resource="Phrase",
+        )
+        value: str = MEF(name="value", display_name="Value")
+
+    configured = MaltegoEntity.to_v3_entity_definition(VariantEntity).model_dump(
+        by_alias=True,
+        exclude_none=True,
+    )
+    plain = MaltegoEntity.to_v3_entity_definition(PlainEntity).model_dump(
+        by_alias=True,
+        exclude_none=True,
+    )
+
+    assert configured["variantProperty"] == "variant.kind"
+    assert configured["variantIconProperty"] == "variant.icon"
+    assert "variantProperty" not in plain
+    assert "variantIconProperty" not in plain
+
+
+@pytest.mark.asyncio
+async def test_entity_variant_metadata_requires_protocol_3_3(
+    async_client_mock_server: httpx.AsyncClient,
+    mock_server: typing.Any,
+) -> None:
+    class VariantEntity(MaltegoEntity):
+        TYPE_NAME = "test.ProtocolVersionedVariantEntity"
+        Config = MaltegoEntityConfig(
+            value_property="value",
+            display_name="Protocol Versioned Variant Entity",
+            icon_resource="Phrase",
+            variant_property="variant.kind",
+            variant_icon_property="variant.icon",
+        )
+        value: str = MEF(name="value", display_name="Value")
+
+    mock_server.register_entity(VariantEntity)
+
+    legacy_response = await async_client_mock_server.get(
+        f"{PREFIX}/assets/entities",
+        headers={"Maltego-Protocol-Version": "3.2"},
+    )
+    default_response = await async_client_mock_server.get(f"{PREFIX}/assets/entities")
+    current_response = await async_client_mock_server.get(
+        f"{PREFIX}/assets/entities",
+        headers={"Maltego-Protocol-Version": "3.3"},
+    )
+
+    assert legacy_response.status_code == 200
+    assert default_response.status_code == 200
+    assert current_response.status_code == 200
+    legacy_entity = next(entity for entity in legacy_response.json() if entity["id"] == VariantEntity.TYPE_NAME)
+    default_entity = next(entity for entity in default_response.json() if entity["id"] == VariantEntity.TYPE_NAME)
+    current_entity = next(entity for entity in current_response.json() if entity["id"] == VariantEntity.TYPE_NAME)
+    assert "variantProperty" not in legacy_entity
+    assert "variantIconProperty" not in legacy_entity
+    assert default_entity["variantProperty"] == "variant.kind"
+    assert default_entity["variantIconProperty"] == "variant.icon"
+    assert current_entity["variantProperty"] == "variant.kind"
+    assert current_entity["variantIconProperty"] == "variant.icon"
+    assert legacy_response.headers["maltego-protocol-version"] == "3.2"
+    assert default_response.headers["maltego-protocol-version"] == "3.3"
+    assert current_response.headers["maltego-protocol-version"] == "3.3"
 
 
 @pytest.mark.asyncio
@@ -81,7 +164,7 @@ async def test_supported_capabilities_response_shape_is_stable(
 
     assert response.status_code == 200
     assert response.json() == {
-        "protocol": "3.2",
+        "protocol": "3.3",
         "supported_capabilities": [
             {
                 "name": "inputConstraints",

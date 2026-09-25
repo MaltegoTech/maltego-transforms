@@ -137,7 +137,7 @@ class IntegrationClient:
             verify_ssl: bool = True,
             use_api_key_for_throttling: bool = True,
             use_client_ip_for_throttling: bool = False,
-            proxies: Optional[ProxyTypes] = None,
+            proxies: Optional[Union[ProxyTypes, Dict[str, ProxyTypes]]] = None,
             trust_env: bool = True,
             response_hooks: Optional[
                 List[Callable[..., Any]]
@@ -204,7 +204,7 @@ class IntegrationClient:
 
     def _build_httpx_client(
         self,
-        proxies: Optional[ProxyTypes] = None,
+        proxies: Optional[Union[ProxyTypes, Dict[str, ProxyTypes]]] = None,
         trust_env: bool = True,
     ) -> httpx.AsyncClient:
         client_kwargs: Dict[str, Any] = {

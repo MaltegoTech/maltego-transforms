@@ -15,11 +15,16 @@ same already-attached package distributions to PyPI after publication.
 - Change the published-release workflow to publish already-attached artifacts
   to PyPI only.
 - Add focused workflow-contract tests.
+- Widen supported dependency ranges, regenerate the Poetry lockfile, and adapt
+  HTTPX client construction to its current proxy and ASGI transport APIs.
+- Configure lockfile-only Python dependency updates through Dependabot.
 
 ## Non-goals
 
-- No package, lockfile, changelog, tag, ruleset, release, or PyPI change.
-- No SDK source changes.
+- No package version, changelog, tag, ruleset, release, or PyPI publication
+  change.
+- No intentional SDK behavior change outside the HTTPX compatibility work
+  required by the dependency updates.
 - No automatic release publication; the human retains the UI publish step.
 
 ## Design
@@ -71,4 +76,5 @@ git diff --check
 - [x] The draft preparation path cannot publish a release.
 - [x] The published-release path cannot modify release assets.
 - [x] Package version and release tag are compared with an optional `v` prefix.
-- [x] No package version or lockfile changes exist.
+- [x] Dependency ranges, lockfile, Dependabot coverage, and HTTPX compatibility
+  updates are consistent.

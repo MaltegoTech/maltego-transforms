@@ -309,6 +309,48 @@ def test_entity_config_casting():
     assert invalid.visible == getattr(invalid, "_visible") == True
 
 
+def test_entity_config_variant_property_references() -> None:
+    config = MaltegoEntityConfig(
+        value_property="value",
+        display_name="Variant",
+        variant_property=1,  # type: ignore[arg-type]
+        variant_icon_property=2,  # type: ignore[arg-type]
+    )
+
+    assert config.variant_property == "1"
+    assert config.variant_icon_property == "2"
+
+    copied = config.copy()
+    assert copied.variant_property == "1"
+    assert copied.variant_icon_property == "2"
+
+    parent = MaltegoEntityConfig(
+        value_property="value",
+        display_name="Parent",
+        variant_property="parent.variant",
+        variant_icon_property="parent.icon",
+    )
+    child = MaltegoEntityConfig(
+        value_property="value",
+        display_name="Child",
+        variant_icon_property="child.icon",
+    )
+
+    merged = child.merge_with(parent)
+    assert merged.variant_property == "parent.variant"
+    assert merged.variant_icon_property == "child.icon"
+
+
+def test_entity_config_positional_arguments_remain_compatible() -> None:
+    config = MaltegoEntityConfig("value", "value-key", "Display")
+
+    assert config.value_property == "value"
+    assert config.value_key == "value-key"
+    assert config.display_name == "Display"
+    assert config.variant_property is None
+    assert config.variant_icon_property is None
+
+
 def test_entity_config_icons():
     icon_config_tuple = MaltegoEntityConfig(
         value_property="foo",

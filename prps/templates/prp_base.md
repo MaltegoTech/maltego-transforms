@@ -51,8 +51,8 @@ to make the change without guessing at APIs or drifting scope.
 - file: AGENTS.md
   why: Repository rules, test gates, public-tooling constraints, and agent guidance
 
-- file: runbooks/using-prps.md
-  why: PRP expectations and execution rules
+- file: runbooks/structured-planning.md
+  why: Planning-format selection and PRP execution rules
 
 - file: [path/to/example.py]
   why: [Pattern to follow, gotchas to avoid]
