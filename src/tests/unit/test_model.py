@@ -487,14 +487,22 @@ def test_boolean_list_parse():
 
     prepared_settings = mock_transforms.prepare_settings(
         proto_settings_raw={
-            'boolean_list': [True, False, "foo", 0, 22],
+            'boolean_list': [True, False, "false", "TRUE", "foo", 0, 22],
         },
         transform=mock_transforms
     )
     assert (prepared_settings.keys()) == {"boolean_list"}
-    assert isinstance(list(prepared_settings.values())[0], list)
-    assert list(prepared_settings.values())[0] == [
-        True, False, True, False, True]
+    # 'false' must not become True; unparseable strings are dropped
+    assert prepared_settings["boolean_list"] == [True, False, False, True, False, True]
+
+
+@pytest.mark.parametrize("value, expected", [
+    ("false", False), ("False", False), ("true", True), ("TRUE", True), (" true ", True), ("1", True), ("0", False),
+    ("foo", None), ("yes", None), (True, True), (0, False),
+])
+def test_boolean_setting_parses_strings(value, expected):
+    setting = TransformSetting(name='t', display_name='t', type=TransformSetting.Types.boolean)
+    assert setting.transform_setting_from_blueprint(value) is expected
 
 
 def test_empty_string_handling_v3():
