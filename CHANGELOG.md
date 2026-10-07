@@ -4,8 +4,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
-
 ## 1.2.0 - 2026-10-07
 
 ### Security
@@ -61,21 +59,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   second display field or overlay added between two polls replaced the first,
   so clients received only the last one.
 
-### Removed
-
-- The `fastapi-restful` dependency, and with it the transitive `psutil<6`
-  dependency. Protocol models now use the SDK's own
-  `maltego.protocol.api_model.APIModel`, which generates the same camelCase
-  aliases, so wire payloads and the OpenAPI schema are unchanged. The
-  `API_DEBUG`, `API_TITLE`, `API_VERSION`, `API_OPENAPI_URL`,
-  `API_OPENAPI_PREFIX` and `API_DISABLE_DOCS` environment variables still
-  configure the FastAPI application. Projects that import `fastapi_restful`
-  themselves must now declare it as their own dependency.
-
-## 1.1.2 - 2026-09-29
-
-### Fixed
-
 - `DATE_TIME` and `DATE` property values sent as Unix epoch timestamps
   (milliseconds such as `"1696175006000"`, or seconds) now parse to UTC
   datetimes instead of failing with `OverflowError` and reaching the transform
@@ -110,6 +93,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unparseable input property values now log a WARNING with the property name,
   type and exception type instead of an ERROR traceback containing the raw
   value; the raw value is still passed through to the transform.
+
+### Removed
+
+- The `fastapi-restful` dependency, and with it the transitive `psutil<6`
+  dependency. Protocol models now use the SDK's own
+  `maltego.protocol.api_model.APIModel`, which generates the same camelCase
+  aliases, so wire payloads and the OpenAPI schema are unchanged. The
+  `API_DEBUG`, `API_TITLE`, `API_VERSION`, `API_OPENAPI_URL`,
+  `API_OPENAPI_PREFIX` and `API_DISABLE_DOCS` environment variables still
+  configure the FastAPI application. Projects that import `fastapi_restful`
+  themselves must now declare it as their own dependency.
 
 ## 1.1.1 - 2026-09-25
 
