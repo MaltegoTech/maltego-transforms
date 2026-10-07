@@ -944,3 +944,25 @@ def test_namespace_annotations_reads_materialized_and_lazy() -> None:
         assert result == {"y": str}
     else:
         assert result == {}
+
+
+@pytest.mark.parametrize("value, expected", [
+    # epoch milliseconds, as sent by Maltego clients (prod regression: OverflowError in dateutil)
+    ("1696175006000", datetime.datetime(2023, 10, 1, 15, 43, 26, tzinfo=datetime.timezone.utc)),
+    ("1574040671000", datetime.datetime(2019, 11, 18, 1, 31, 11, tzinfo=datetime.timezone.utc)),
+    ("1696175006123", datetime.datetime(2023, 10, 1, 15, 43, 26, 123000, tzinfo=datetime.timezone.utc)),
+    # epoch seconds
+    ("1696175006", datetime.datetime(2023, 10, 1, 15, 43, 26, tzinfo=datetime.timezone.utc)),
+    ("-86400", datetime.datetime(1969, 12, 31, tzinfo=datetime.timezone.utc)),
+    # ISO strings unchanged, including all-digit compact forms dateutil already parses
+    ("2023-07-17T21:52:59.050Z", datetime.datetime(2023, 7, 17, 21, 52, 59, 50000, tzinfo=datetime.timezone.utc)),
+    # dateutil returns naive datetimes for offset-less input; that behaviour is unchanged
+    ("20230717", datetime.datetime(2023, 7, 17)),  # noqa: DTZ001
+    ("202307171543", datetime.datetime(2023, 7, 17, 15, 43)),  # noqa: DTZ001
+    ("20230717154326", datetime.datetime(2023, 7, 17, 15, 43, 26)),  # noqa: DTZ001
+])
+def test_parse_str_type_to_value_datetime_epoch_and_iso(value, expected):
+    from maltego.model.entity import coerce_property_type_from_value, parse_str_type_to_value
+    assert parse_str_type_to_value(value, "DATE_TIME") == expected
+    assert parse_str_type_to_value(value, "DATE") == expected.date()
+    assert coerce_property_type_from_value(value, datetime.datetime) == expected

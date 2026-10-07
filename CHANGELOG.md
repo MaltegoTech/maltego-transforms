@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- `DATE_TIME` and `DATE` property values sent as Unix epoch timestamps
+  (milliseconds such as `"1696175006000"`, or seconds) now parse to UTC
+  datetimes instead of failing with `OverflowError` and reaching the transform
+  as raw strings. Strings dateutil already parses are unchanged.
+
 ## 1.1.1 - 2026-09-25
 
 ### Fixed
