@@ -2,7 +2,7 @@
 from __future__ import annotations
 from typing import List
 
-from fastapi_restful.api_model import APIModel
+from maltego.protocol.api_model import APIModel
 
 from maltego.protocol.v3.execution.entity import TransformRunEntity
 from maltego.protocol.v3.execution.link import TransformRunLink

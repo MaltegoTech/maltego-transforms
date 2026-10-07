@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- The server now finishes application startup under uvicorn. With
+  `fastapi-restful` 0.6.0, the expired-execution cleanup loop ran inside the
+  lifespan startup and never returned, so the server never started listening.
+  Cleanup now runs as a background task every `scheduled_cleanup_seconds`,
+  logs and survives failures, and is cancelled on shutdown before the runner
+  shuts down.
+
+### Removed
+
+- The `fastapi-restful` dependency, and with it the transitive `psutil<6`
+  dependency. Protocol models now use the SDK's own
+  `maltego.protocol.api_model.APIModel`, which generates the same camelCase
+  aliases, so wire payloads and the OpenAPI schema are unchanged. The
+  `API_DEBUG`, `API_TITLE`, `API_VERSION`, `API_OPENAPI_URL`,
+  `API_OPENAPI_PREFIX` and `API_DISABLE_DOCS` environment variables still
+  configure the FastAPI application. Projects that import `fastapi_restful`
+  themselves must now declare it as their own dependency.
+
 ## 1.1.2 - 2026-09-29
 
 ### Fixed

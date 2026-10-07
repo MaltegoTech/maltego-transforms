@@ -17,7 +17,7 @@ from typing import (
 import re
 import logging
 from urllib.parse import urlsplit, urlunsplit
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from importlib.metadata import entry_points
 import uvicorn
 from uvicorn.supervisors import ChangeReload
@@ -26,11 +26,10 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi_restful.tasks import repeat_every
-from fastapi_restful.api_settings import get_api_settings
 
 # Imports used by this file
 from maltego.config import get_logging_config
+from maltego.server.fastapi_settings import FastAPIAppSettings
 from maltego.middlewares.middlewares import TransformMiddleware
 from maltego.middlewares.oauth_middleware import OAuthMiddleware
 from maltego.middlewares.user_concurrency_limit_middleware import (
@@ -233,30 +232,32 @@ class MaltegoTransformServer:
         self._protocol_routers: List[fastapi.routing.APIRouter] = []
         self._protocol_extensions: List[ProtocolExtension] = []
         self._installed_protocol_extensions_loaded = False
-        get_api_settings.cache_clear()
-        fastapi_settings = get_api_settings()
 
         @asynccontextmanager
         async def lifespan(
             app: fastapi.FastAPI,
         ) -> AsyncIterator[None]:  # pylint: disable=unused-argument
-            @repeat_every(
-                seconds=self.scheduled_cleanup_seconds, logger=log, wait_first=True
-            )
             async def remove_expired_executions_task() -> None:
-                if self.runner:
-                    self.runner.cleanup()
+                while True:
+                    await asyncio.sleep(self.scheduled_cleanup_seconds)
+                    try:
+                        if self.runner:
+                            self.runner.cleanup()
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        log.exception("Scheduled cleanup of expired executions failed")
 
-            await remove_expired_executions_task()
-            yield
-            # Shutdown
-            self.runner.shutdown()
-            await close_validator()  # Close auth HTTP client
+            cleanup_task = asyncio.create_task(remove_expired_executions_task())
+            try:
+                yield
+            finally:
+                # Shutdown
+                cleanup_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await cleanup_task
+                self.runner.shutdown()
+                await close_validator()  # Close auth HTTP client
 
-        fastapi_kwargs = dict(fastapi_settings.fastapi_kwargs)
-        fastapi_kwargs["docs_url"] = None
-        fastapi_kwargs["redoc_url"] = None
-        self.app = fastapi.FastAPI(**fastapi_kwargs, lifespan=lifespan)
+        self.app = fastapi.FastAPI(**FastAPIAppSettings().fastapi_kwargs, lifespan=lifespan)
 
         @self.app.exception_handler(MaltegoHTTPClientError)
         async def exception_handler(

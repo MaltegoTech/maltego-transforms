@@ -3,7 +3,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Optional, List
 
-from fastapi_restful.api_model import APIModel
+from maltego.protocol.api_model import APIModel
 
 
 class UiMessageType(Enum):

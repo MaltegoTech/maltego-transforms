@@ -1,6 +1,6 @@
 # Copyright (c) Maltego Technologies GmbH.
 from typing import Optional
-from fastapi_restful.api_model import APIModel
+from maltego.protocol.api_model import APIModel
 
 
 class V3OAuthServiceDefinition(APIModel):

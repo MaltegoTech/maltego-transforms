@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import List, Literal, Union, Any, Optional
 from pydantic import Field as PydanticField
-from fastapi_restful.api_model import APIModel
+from maltego.protocol.api_model import APIModel
 
 from maltego.protocol.v3.execution.ui_message import UiMessage
 from maltego.protocol.v3.execution.link import TransformRunLink
