@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Cleanup of expired v3 runs no longer fails with `TypeError: 'list' object is
+  not callable` on multi-input (multiplexed) runs. Such runs now receive their
+  410 timeout error message; previously it was lost (the run was still marked
+  timed out and removed on a later pass). A failure while cleaning up one run
+  is now logged and no longer delays cleanup of the remaining runs in the same
+  pass.
+
 - The server now finishes application startup under uvicorn. With
   `fastapi-restful` 0.6.0, the expired-execution cleanup loop ran inside the
   lifespan startup and never returned, so the server never started listening.
