@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   WARNING instead of DEBUG, so rejected runs can be diagnosed.
 - v3 prompt responses rejected with 400 `Invalid input.` or 404 `Resource not
   found.` now log the reason at WARNING instead of DEBUG.
+- `boolean` and `boolean_list` transform settings now parse `"true"`/`"false"`
+  (case-insensitive) and `"1"`/`"0"` strings correctly; previously any
+  non-empty string, including `"false"` and `"0"`, became `True`. Other strings
+  (e.g. `"yes"`) are treated as invalid: `None`, or dropped from a list.
 
 ## 1.1.1 - 2026-09-25
 
