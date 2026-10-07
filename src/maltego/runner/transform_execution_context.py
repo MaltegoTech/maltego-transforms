@@ -185,6 +185,8 @@ class MultiplexedTransformExecutionContext:
             )
             for transform_input in transform_inputs
         )
+        if not self.contexts:
+            raise ValueError("MultiplexedTransformExecutionContext requires at least one transform input")
         self.__result = MultiplexedTransformResultSet(c.result for c in self.contexts)
 
     def v3_request(self) -> bool:

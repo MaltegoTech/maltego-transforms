@@ -400,6 +400,28 @@ async def test_run_transform_wrong_input_entity_type(async_client_example_server
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("user_agent", [
+    UA_4_0_0["user-agent"],  # legacy fallback path (< 4.6)
+    "jinxpy-protocol-translator",  # unparseable UA is treated as legacy
+    UA_4_10_0["user-agent"],
+])
+async def test_run_transform_empty_input_graph_is_rejected(async_client_example_server: httpx.AsyncClient,
+                                                           user_agent: str) -> None:
+    """A run with zero input entities must be a 400, never a scheduled run that 500s on min()/max()."""
+    payload = {**MOCK_TRANSFORM_RUN_REQUEST_V3, "input": {
+        "metadata": {"entitiesTypesStat": {}, "entitiesTotalCount": 0, "linksTotalCount": 0, "rootEntitiesCount": 0},
+        "graph": {"entities": [], "links": []},
+    }}
+    response = await async_client_example_server.post(
+        f"transforms/{PREFIX}.{NAMESPACE}.transform_person/run",
+        json=payload,
+        headers={**MOCK_HEADER_V3, "user-agent": user_agent},
+    )
+    assert response.status_code == 400
+    assert response.json() == {"detail": "No input entity matches the transforms signature"}
+
+
+@pytest.mark.asyncio
 async def test_context_log(async_client_example_server: httpx.AsyncClient, snapshot: typing.Any) -> None:
     transform_name = f"{PREFIX}.{NAMESPACE}.transform_logging"
     run_response, status_response = await run_v3_transform(

@@ -1262,13 +1262,14 @@ class V3Server:
                 log.error(f"No matching transform_inputs in {transform.name}. "
                           f"Allowed types: {transform.annotation.input.get_entities_type_ids()}")
                 log.debug(f"Input entities: {graph.entities}")
-                if context.ua.version_lt(4, 6, 0):
+                if context.ua.version_lt(4, 6, 0) and graph.entities:
                     transform_inputs = tuple(graph.entities)
                     log.warning(
                         "Falling back to pass all input entities to transform "
                         "for compatibility with older Maltego client versions."
                     )
                 else:
+                    # Also covers an empty input graph: never schedule a run with zero inputs.
                     raise fastapi.HTTPException(
                         status_code=fastapi.status.HTTP_400_BAD_REQUEST,
                         detail="No input entity matches the transforms signature"

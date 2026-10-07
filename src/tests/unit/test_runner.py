@@ -1125,6 +1125,18 @@ def _label(event) -> str:
     return type(event).__name__
 
 
+def test_schedule_transform_list_in_rejects_empty_inputs_without_queueing():
+    """An empty multi-input run must fail fast instead of entering the queue and breaking cleanup()."""
+    runner = create_test_runner(retention_time=1)
+    mux = _multiplexed_run({"a": 200})
+    context = MaltegoContext(MaltegoGraph(), MagicMock(headers={}), v3_request=True)
+
+    with pytest.raises(ValueError):
+        runner.schedule_transform_list_in(mux.contexts[0].transform, (), {}, 12, context)
+
+    runner.cleanup()
+
+
 @pytest.mark.asyncio
 async def test_multiplexed_results_page_by_position_without_drops_or_repeats():
     """A client paging get_results()[ptr:] between inputs must see every event exactly once."""
