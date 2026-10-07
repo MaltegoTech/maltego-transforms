@@ -218,12 +218,8 @@ class MaltegoTransformServer:
                 f"Unsupported Transform Runner {settings.transform_runner} configured"
             )
 
-        self.scheduled_cleanup_seconds = (
-            self._settings.scheduled_cleanup_seconds
-            if self._settings.scheduled_cleanup_seconds
-            else SCHEDULED_CLEANUP_SECONDS
-        )
-        self.runner.retention_time = self.scheduled_cleanup_seconds
+        self._concatenated_runners: list[TransformRunner] = []
+        self._apply_scheduled_cleanup_seconds()
         self.__setup = False
         self._hub_item = MaltegoHubItem()
         self.add_middleware(VerifyMetadataMiddleware())
@@ -242,7 +238,7 @@ class MaltegoTransformServer:
                     await asyncio.sleep(self.scheduled_cleanup_seconds)
                     try:
                         if self.runner:
-                            self.runner.cleanup()
+                            self.cleanup_runners()
                     except Exception:  # pylint: disable=broad-exception-caught
                         log.exception("Scheduled cleanup of expired executions failed")
 
@@ -457,6 +453,26 @@ class MaltegoTransformServer:
         )
         if isinstance(self.runner, ThreadedTransformRunner):
             self.runner.set_worker(self._settings.num_worker)
+        self._apply_scheduled_cleanup_seconds()
+
+    def _apply_scheduled_cleanup_seconds(self) -> None:
+        """Apply the configured cleanup interval and runner retention time."""
+        self.scheduled_cleanup_seconds = (
+            self._settings.scheduled_cleanup_seconds
+            if self._settings.scheduled_cleanup_seconds
+            else SCHEDULED_CLEANUP_SECONDS
+        )
+        self.runner.retention_time = self.scheduled_cleanup_seconds
+
+    def cleanup_runners(self) -> None:
+        """Clean up expired executions of this server's runner and of the runners
+        of all servers attached via :meth:`concat_server`."""
+        cleaned: set[int] = set()
+        for runner in [self.runner, *self._concatenated_runners]:
+            if runner is None or id(runner) in cleaned:
+                continue
+            cleaned.add(id(runner))
+            runner.cleanup()
 
     def set_hub_item(self, hub_item: Optional[MaltegoHubItem]) -> None:
         if hub_item:
@@ -1322,6 +1338,7 @@ class MaltegoTransformServer:
         """
         for router in other.get_routers():
             self.app.include_router(router)
+        self._concatenated_runners.append(other.runner)
 
 
 _DEFAULT_SETTINGS = MaltegoServerSettings(server_name="", ns="None", author=None)
