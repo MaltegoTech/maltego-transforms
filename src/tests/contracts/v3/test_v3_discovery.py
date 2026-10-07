@@ -27,14 +27,14 @@ def _strip_blobs(data: Any) -> Any:
     return data
 
 
-def test_v3_entity_definition_serializes_independent_variant_metadata() -> None:
+def test_v3_entity_definition_serializes_renamed_variant_label_metadata() -> None:
     class VariantEntity(MaltegoEntity):
         TYPE_NAME = "test.VariantEntity"
         Config = MaltegoEntityConfig(
             value_property="value",
             display_name="Variant Entity",
             icon_resource="Phrase",
-            variant_property="variant.kind",
+            variant_label_property="variant.kind",
             variant_icon_property="variant.icon",
         )
         value: str = MEF(name="value", display_name="Value")
@@ -57,8 +57,10 @@ def test_v3_entity_definition_serializes_independent_variant_metadata() -> None:
         exclude_none=True,
     )
 
-    assert configured["variantProperty"] == "variant.kind"
+    assert configured["variantLabelProperty"] == "variant.kind"
+    assert "variantProperty" not in configured
     assert configured["variantIconProperty"] == "variant.icon"
+    assert "variantLabelProperty" not in plain
     assert "variantProperty" not in plain
     assert "variantIconProperty" not in plain
 
@@ -74,7 +76,7 @@ async def test_entity_variant_metadata_requires_protocol_3_3(
             value_property="value",
             display_name="Protocol Versioned Variant Entity",
             icon_resource="Phrase",
-            variant_property="variant.kind",
+            variant_label_property="variant.kind",
             variant_icon_property="variant.icon",
         )
         value: str = MEF(name="value", display_name="Value")
@@ -97,11 +99,14 @@ async def test_entity_variant_metadata_requires_protocol_3_3(
     legacy_entity = next(entity for entity in legacy_response.json() if entity["id"] == VariantEntity.TYPE_NAME)
     default_entity = next(entity for entity in default_response.json() if entity["id"] == VariantEntity.TYPE_NAME)
     current_entity = next(entity for entity in current_response.json() if entity["id"] == VariantEntity.TYPE_NAME)
+    assert "variantLabelProperty" not in legacy_entity
     assert "variantProperty" not in legacy_entity
     assert "variantIconProperty" not in legacy_entity
-    assert default_entity["variantProperty"] == "variant.kind"
+    assert default_entity["variantLabelProperty"] == "variant.kind"
+    assert "variantProperty" not in default_entity
     assert default_entity["variantIconProperty"] == "variant.icon"
-    assert current_entity["variantProperty"] == "variant.kind"
+    assert current_entity["variantLabelProperty"] == "variant.kind"
+    assert "variantProperty" not in current_entity
     assert current_entity["variantIconProperty"] == "variant.icon"
     assert legacy_response.headers["maltego-protocol-version"] == "3.2"
     assert default_response.headers["maltego-protocol-version"] == "3.3"

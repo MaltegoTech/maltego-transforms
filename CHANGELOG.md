@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 1.2.0 - 2026-10-07
+
 ### Security
 
 - FastAPI's built-in OpenAPI route is now removed at whatever path
@@ -14,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   without authentication, even with `swagger_enabled=False`. With
   `swagger_enabled=True` the document is served only at the auth-protected
   `/openapi.json`.
+
+### Changed
+
+- Entity variant label metadata is now configured with `variant_label_property`
+  and published as `variantLabelProperty`. The former `variant_property`
+  remains accepted as a constructor keyword and readable as an attribute
+  alias; discovery responses no longer emit `variantProperty`.
 
 ### Fixed
 

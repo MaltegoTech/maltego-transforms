@@ -688,7 +688,7 @@ class V3Server:
                     self._override_index,
                 )
                 if protocol_version != MALTEGO_PROTOCOL_VERSION_3_3:
-                    entity_def.variant_property = None
+                    entity_def.variant_label_property = None
                     entity_def.variant_icon_property = None
 
                 # Layer 2: Coalesce capability check (after overrides)
@@ -716,7 +716,7 @@ class V3Server:
                 self._override_index,
             )
             if protocol_version != MALTEGO_PROTOCOL_VERSION_3_3:
-                entity_def.variant_property = None
+                entity_def.variant_label_property = None
                 entity_def.variant_icon_property = None
 
             # Layer 2: Coalesce capability check for composite entities
