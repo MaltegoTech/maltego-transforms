@@ -487,14 +487,22 @@ def test_boolean_list_parse():
 
     prepared_settings = mock_transforms.prepare_settings(
         proto_settings_raw={
-            'boolean_list': [True, False, "foo", 0, 22],
+            'boolean_list': [True, False, "false", "TRUE", "foo", 0, 22],
         },
         transform=mock_transforms
     )
     assert (prepared_settings.keys()) == {"boolean_list"}
-    assert isinstance(list(prepared_settings.values())[0], list)
-    assert list(prepared_settings.values())[0] == [
-        True, False, True, False, True]
+    # 'false' must not become True; unparseable strings are dropped
+    assert prepared_settings["boolean_list"] == [True, False, False, True, False, True]
+
+
+@pytest.mark.parametrize("value, expected", [
+    ("false", False), ("False", False), ("true", True), ("TRUE", True), (" true ", True), ("1", True), ("0", False),
+    ("foo", None), ("yes", None), (True, True), (0, False),
+])
+def test_boolean_setting_parses_strings(value, expected):
+    setting = TransformSetting(name='t', display_name='t', type=TransformSetting.Types.boolean)
+    assert setting.transform_setting_from_blueprint(value) is expected
 
 
 def test_empty_string_handling_v3():
@@ -517,3 +525,36 @@ def test_daterange_str_uses_current_wire_format() -> None:
     )
 
     assert str(value) == "1992-05-21T00:00:00.000Z/2023-06-28T00:00:00.000Z"
+
+
+_EPOCH_START = datetime(2023, 11, 14, 22, 13, 20, tzinfo=timezone.utc)
+
+
+def test_daterange_fromstring_v3_accepts_epoch_millis() -> None:
+    parsed = daterange.fromstring_v3("1700000000000/1700000100000")
+    assert parsed.start == _EPOCH_START
+    assert parsed.end == datetime(2023, 11, 14, 22, 15, tzinfo=timezone.utc)
+
+
+def test_daterange_mixed_naive_and_aware_does_not_raise() -> None:
+    parsed = daterange(start=datetime(2020, 1, 1, tzinfo=timezone.utc), end=datetime(2021, 1, 1))  # noqa: DTZ001
+    assert parsed.start == datetime(2020, 1, 1, tzinfo=timezone.utc)
+
+
+def test_date_settings_accept_epoch_millis() -> None:
+    def setting(type_: TransformSetting.Types) -> TransformSetting:
+        return TransformSetting(name='t', display_name='t', type=type_)
+
+    assert setting(TransformSetting.Types.datetime).transform_setting_from_blueprint("1700000000000") == _EPOCH_START
+    assert setting(TransformSetting.Types.date).transform_setting_from_blueprint("1700000000000") == _EPOCH_START.date()
+    assert setting(TransformSetting.Types.datetime_range).transform_setting_from_blueprint(
+        "1700000000000/1700000100000").start == _EPOCH_START
+
+
+@pytest.mark.parametrize("type_, value", [
+    (TransformSetting.Types.datetime, "99999999999999999999999"),
+    (TransformSetting.Types.date, "99999999999999999999999"),
+    (TransformSetting.Types.datetime_range, "99999999999999999999999/1"),
+])
+def test_date_settings_out_of_range_values_are_rejected_not_raised(type_, value) -> None:
+    assert TransformSetting(name='t', display_name='t', type=type_).transform_setting_from_blueprint(value) is None

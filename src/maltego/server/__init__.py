@@ -17,7 +17,7 @@ from typing import (
 import re
 import logging
 from urllib.parse import urlsplit, urlunsplit
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from importlib.metadata import entry_points
 import uvicorn
 from uvicorn.supervisors import ChangeReload
@@ -26,11 +26,10 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi_restful.tasks import repeat_every
-from fastapi_restful.api_settings import get_api_settings
 
 # Imports used by this file
 from maltego.config import get_logging_config
+from maltego.server.fastapi_settings import FastAPIAppSettings
 from maltego.middlewares.middlewares import TransformMiddleware
 from maltego.middlewares.oauth_middleware import OAuthMiddleware
 from maltego.middlewares.user_concurrency_limit_middleware import (
@@ -219,12 +218,8 @@ class MaltegoTransformServer:
                 f"Unsupported Transform Runner {settings.transform_runner} configured"
             )
 
-        self.scheduled_cleanup_seconds = (
-            self._settings.scheduled_cleanup_seconds
-            if self._settings.scheduled_cleanup_seconds
-            else SCHEDULED_CLEANUP_SECONDS
-        )
-        self.runner.retention_time = self.scheduled_cleanup_seconds
+        self._concatenated_runners: list[TransformRunner] = []
+        self._apply_scheduled_cleanup_seconds()
         self.__setup = False
         self._hub_item = MaltegoHubItem()
         self.add_middleware(VerifyMetadataMiddleware())
@@ -233,30 +228,32 @@ class MaltegoTransformServer:
         self._protocol_routers: List[fastapi.routing.APIRouter] = []
         self._protocol_extensions: List[ProtocolExtension] = []
         self._installed_protocol_extensions_loaded = False
-        get_api_settings.cache_clear()
-        fastapi_settings = get_api_settings()
 
         @asynccontextmanager
         async def lifespan(
             app: fastapi.FastAPI,
         ) -> AsyncIterator[None]:  # pylint: disable=unused-argument
-            @repeat_every(
-                seconds=self.scheduled_cleanup_seconds, logger=log, wait_first=True
-            )
             async def remove_expired_executions_task() -> None:
-                if self.runner:
-                    self.runner.cleanup()
+                while True:
+                    await asyncio.sleep(self.scheduled_cleanup_seconds)
+                    try:
+                        if self.runner:
+                            self.cleanup_runners()
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        log.exception("Scheduled cleanup of expired executions failed")
 
-            await remove_expired_executions_task()
-            yield
-            # Shutdown
-            self.runner.shutdown()
-            await close_validator()  # Close auth HTTP client
+            cleanup_task = asyncio.create_task(remove_expired_executions_task())
+            try:
+                yield
+            finally:
+                # Shutdown
+                cleanup_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await cleanup_task
+                self.runner.shutdown()
+                await close_validator()  # Close auth HTTP client
 
-        fastapi_kwargs = dict(fastapi_settings.fastapi_kwargs)
-        fastapi_kwargs["docs_url"] = None
-        fastapi_kwargs["redoc_url"] = None
-        self.app = fastapi.FastAPI(**fastapi_kwargs, lifespan=lifespan)
+        self.app = fastapi.FastAPI(**FastAPIAppSettings().fastapi_kwargs, lifespan=lifespan)
 
         @self.app.exception_handler(MaltegoHTTPClientError)
         async def exception_handler(
@@ -456,6 +453,26 @@ class MaltegoTransformServer:
         )
         if isinstance(self.runner, ThreadedTransformRunner):
             self.runner.set_worker(self._settings.num_worker)
+        self._apply_scheduled_cleanup_seconds()
+
+    def _apply_scheduled_cleanup_seconds(self) -> None:
+        """Apply the configured cleanup interval and runner retention time."""
+        self.scheduled_cleanup_seconds = (
+            self._settings.scheduled_cleanup_seconds
+            if self._settings.scheduled_cleanup_seconds
+            else SCHEDULED_CLEANUP_SECONDS
+        )
+        self.runner.retention_time = self.scheduled_cleanup_seconds
+
+    def cleanup_runners(self) -> None:
+        """Clean up expired executions of this server's runner and of the runners
+        of all servers attached via :meth:`concat_server`."""
+        cleaned: set[int] = set()
+        for runner in [self.runner, *self._concatenated_runners]:
+            if runner is None or id(runner) in cleaned:
+                continue
+            cleaned.add(id(runner))
+            runner.cleanup()
 
     def set_hub_item(self, hub_item: Optional[MaltegoHubItem]) -> None:
         if hub_item:
@@ -543,21 +560,18 @@ class MaltegoTransformServer:
 
         self.app.openapi = custom_openapi
 
-        if not self._settings.swagger_enabled:
-            # Strip FastAPI's built-in /openapi.json route so the endpoint is unreachable.
-            self.app.router.routes = [
-                r for r in self.app.router.routes
-                if getattr(r, "path", None) != "/openapi.json"
-            ]
-            return
-
-        # Strip FastAPI's default /openapi.json route (methods=None, no auth) before registering
-        # our auth-protected version. Without this, the default route matches first in Starlette's
-        # route resolution and the auth dependency is never invoked.
+        # Strip FastAPI's built-in OpenAPI route (no auth). It lives at app.openapi_url, which
+        # API_OPENAPI_URL can move away from /openapi.json, so strip both paths. With swagger
+        # enabled, the auth-protected /openapi.json below must also not be shadowed by it, since
+        # the built-in route would match first in Starlette's route resolution.
+        # openapi_url is None with API_DISABLE_DOCS; never match path-less routes.
+        builtin_paths = {"/openapi.json", self.app.openapi_url} - {None}
         self.app.router.routes = [
             r for r in self.app.router.routes
-            if getattr(r, "path", None) != "/openapi.json"
+            if getattr(r, "path", None) not in builtin_paths
         ]
+        if not self._settings.swagger_enabled:
+            return
 
         @self.app.get("/openapi.json", include_in_schema=False, dependencies=[fastapi.Depends(optional_auth)])
         async def openapi_spec() -> Dict[str, Any]:
@@ -1324,6 +1338,7 @@ class MaltegoTransformServer:
         """
         for router in other.get_routers():
             self.app.include_router(router)
+        self._concatenated_runners.append(other.runner)
 
 
 _DEFAULT_SETTINGS = MaltegoServerSettings(server_name="", ns="None", author=None)

@@ -1,7 +1,7 @@
 # Copyright (c) Maltego Technologies GmbH.
 from __future__ import annotations
 
-from fastapi_restful.api_model import APIModel
+from maltego.protocol.api_model import APIModel
 
 
 class ResponseErrorMessage(APIModel):

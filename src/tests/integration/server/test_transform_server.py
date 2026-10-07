@@ -3,7 +3,8 @@
 import inspect
 import logging
 import os
-from unittest.mock import AsyncMock, patch
+import datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import fastapi
 import pytest
@@ -20,6 +21,10 @@ from maltego.auth.problem import build_auth_problem
 from maltego.auth.validator import ValidationErrorKind
 from maltego.middlewares.user_concurrency_limit_middleware import UserConcurrencyLimitMiddleware
 from maltego.model.transform import MaltegoTransform
+from maltego.model.context import MaltegoContext
+from maltego.model.graph import MaltegoGraph
+from maltego.model.types import ExecutionState
+from maltego.runner.transform_execution_context import TransformExecutionContext
 from maltego.server import MaltegoTransformServer, MaltegoServerSettings
 from maltego.server.etag_middleware import ETagMiddleware
 from maltego.server.tracing_middleware import TraceparentMiddleware
@@ -484,6 +489,68 @@ def test_concat_server_includes_protocol_extension_routers() -> None:
         response = client.get("/extra/extension")
         assert response.status_code == 200
         assert response.json() == {"status": "ok"}
+    finally:
+        main_server.runner.shutdown()
+        other_server.runner.shutdown()
+
+
+@pytest.mark.parametrize(
+    ("configured", "expected"),
+    [(1800, 1800), (0, maltego.server.SCHEDULED_CLEANUP_SECONDS)],
+)
+def test_setup_applies_scheduled_cleanup_seconds(configured, expected) -> None:
+    server = MaltegoTransformServer(
+        settings=MaltegoServerSettings(server_name="s", ns="s", author="maltoso")
+    )
+    settings = MaltegoServerSettings(
+        server_name="s", ns="s", author="maltoso", scheduled_cleanup_seconds=configured
+    )
+    try:
+        server.setup(settings)
+        assert server.scheduled_cleanup_seconds == expected
+        assert server.runner.retention_time == expected
+    finally:
+        server.runner.shutdown()
+
+
+def test_cleanup_runners_reaps_stale_runs_of_concatenated_servers() -> None:
+    main_settings = MaltegoServerSettings(server_name="main", ns="main", author="maltoso")
+    other_settings = MaltegoServerSettings(
+        server_name="extra",
+        ns="extra",
+        author="maltoso",
+        api_prefix="extra",
+        scheduled_cleanup_seconds=1,
+    )
+    main_server = MaltegoTransformServer(settings=main_settings)
+    other_server = MaltegoTransformServer(settings=other_settings)
+    other_server.setup(other_settings)
+    main_server.setup(main_settings)
+    main_server.concat_server(other_server)
+
+    transform = MagicMock()
+    transform.name = "test_transform"
+    request = MagicMock()
+    request.headers = {}
+    execution_context = TransformExecutionContext(
+        run_id="stale-run",
+        transform=transform,
+        transform_input=MagicMock(),
+        transform_settings={},
+        limit=100,
+        context=MaltegoContext(MaltegoGraph(), request, v3_request=True),
+        transform_execution_timeout=60,
+        middleware_execution_timeout=60,
+    )
+    other_server.runner._TransformRunner__add(execution_context)
+    # The runner stamps update/fetch times with naive local datetimes, so age them the same way.
+    old_time = datetime.datetime.now() - datetime.timedelta(seconds=2)  # noqa: DTZ005
+    execution_context.result.update_time = old_time
+    execution_context.result.last_fetch_time = old_time
+
+    try:
+        main_server.cleanup_runners()
+        assert execution_context.result.state == ExecutionState.TIMED_OUT
     finally:
         main_server.runner.shutdown()
         other_server.runner.shutdown()

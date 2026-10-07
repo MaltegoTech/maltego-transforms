@@ -688,7 +688,7 @@ class V3Server:
                     self._override_index,
                 )
                 if protocol_version != MALTEGO_PROTOCOL_VERSION_3_3:
-                    entity_def.variant_property = None
+                    entity_def.variant_label_property = None
                     entity_def.variant_icon_property = None
 
                 # Layer 2: Coalesce capability check (after overrides)
@@ -716,7 +716,7 @@ class V3Server:
                 self._override_index,
             )
             if protocol_version != MALTEGO_PROTOCOL_VERSION_3_3:
-                entity_def.variant_property = None
+                entity_def.variant_label_property = None
                 entity_def.variant_icon_property = None
 
             # Layer 2: Coalesce capability check for composite entities
@@ -1262,13 +1262,14 @@ class V3Server:
                 log.error(f"No matching transform_inputs in {transform.name}. "
                           f"Allowed types: {transform.annotation.input.get_entities_type_ids()}")
                 log.debug(f"Input entities: {graph.entities}")
-                if context.ua.version_lt(4, 6, 0):
+                if context.ua.version_lt(4, 6, 0) and graph.entities:
                     transform_inputs = tuple(graph.entities)
                     log.warning(
                         "Falling back to pass all input entities to transform "
                         "for compatibility with older Maltego client versions."
                     )
                 else:
+                    # Also covers an empty input graph: never schedule a run with zero inputs.
                     raise fastapi.HTTPException(
                         status_code=fastapi.status.HTTP_400_BAD_REQUEST,
                         detail="No input entity matches the transforms signature"
@@ -1303,7 +1304,9 @@ class V3Server:
                 detail=e.message or "Bad request",
             )
         except ValueError as e:
-            log.debug("Validation error scheduling transform: %s", e)
+            # The client only sees "Invalid input."; keep the reason in the
+            # server log so rejected runs are diagnosable.
+            log.warning("Rejected transform input while scheduling: %s: %s", type(e).__name__, e)
             raise fastapi.HTTPException(
                 status_code=fastapi.status.HTTP_400_BAD_REQUEST,
                 detail="Invalid input.",
@@ -1589,13 +1592,13 @@ class V3Server:
                 raise timeout_exception
             await self.transform_runner.prompt_response(run_id, prompt_id, transform_prompt_response)
         except ValueError as e:
-            log.debug("Validation error submitting prompt response: %s", e)
+            log.warning("Rejected prompt response for run_id=%s: %s: %s", run_id, type(e).__name__, e)
             raise fastapi.HTTPException(
                 status_code=fastapi.status.HTTP_400_BAD_REQUEST,
                 detail="Invalid input.",
             )
         except KeyError as e:
-            log.debug("Execution context not found for run_id=%s: %s", run_id, e)
+            log.warning("Execution context not found for prompt response run_id=%s: %s: %s", run_id, type(e).__name__, e)
             key_error = fastapi.HTTPException(
                 status_code=fastapi.status.HTTP_404_NOT_FOUND,
                 detail="Resource not found.",

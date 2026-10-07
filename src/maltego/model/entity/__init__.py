@@ -8,7 +8,6 @@ import datetime
 import logging
 import sys
 import typing
-import dateutil.parser
 import markdown
 import nh3
 
@@ -82,6 +81,7 @@ from maltego.model.types import (
     Url,
     Color,
     daterange,
+    parse_datetime_str,
     LinkColor,
     LinkStyle,
     LinkThickness,
@@ -96,6 +96,11 @@ from maltego.protocol.v3.execution.entity import TransformRunEntity, Bookmark
 ALL_ENTITY_TYPES = "maltego.Unknown"
 
 COMPOSITE_ATTR = "__maltego_is_composite__"
+
+# Update keys whose notifications carry one new item each (see
+# `_add_display_label_or_field` and `add_overlay`), not the whole value. Merged
+# UPDATE events keep every item as a list, and `to_v3_run_entity_update` renders it.
+LIST_UPDATE_KEYS = ("display_information", "overlays")
 
 log = logging.getLogger(__name__)
 
@@ -197,18 +202,24 @@ def _assert_date_str_len(value: str, property_type: str) -> None:
         )
 
 
+_PARSED_DATE_TYPES = ("DATE_TIME", "DATE", "DATE_RANGE")
+
+
 def parse_str_type_to_value(property_value: Any, property_type: str) -> Any:
     if isinstance(property_value, list):
+        if property_type in _PARSED_DATE_TYPES:
+            # empty items carry no date; keep typed lists homogeneous instead of mixing in ''
+            property_value = [value for value in property_value if value]
         return [parse_str_type_to_value(value, property_type) for value in property_value]
     if property_type == 'DATE_TIME' and property_value:
         _assert_date_str_len(property_value, property_type)
-        return dateutil.parser.parse(property_value)
+        return parse_datetime_str(property_value)
     if property_type == 'DATE_RANGE' and property_value:
         _assert_date_str_len(property_value, property_type)
         return daterange.fromstring_v3(property_value)
     if property_type == 'DATE' and property_value:
         _assert_date_str_len(property_value, property_type)
-        return dateutil.parser.parse(property_value).date()
+        return parse_datetime_str(property_value).date()
     return property_value
 
 
@@ -1399,7 +1410,7 @@ class MaltegoEntity(Observable, metaclass=MaltegoEntityMeta):
             description=config.description,
             category=config.category,
             icon_resource=config.large_icon_resource,
-            variant_property=config.variant_property,
+            variant_label_property=config.variant_label_property,
             variant_icon_property=config.variant_icon_property,
             visible=config.visible,
             allowed_root=allowed_root,
@@ -1483,8 +1494,11 @@ class MaltegoEntity(Observable, metaclass=MaltegoEntityMeta):
             else:
                 try:
                     resolved_value = parse_str_type_to_value(value, entity_property.type)
-                except Exception:
-                    log.exception(f"Could not handle property {name} with value {value!r}")
+                except Exception as exc:  # noqa: BLE001 - any parse failure falls back to the raw value
+                    # never log the raw value (PII); pass it through for transforms that cope with strings
+                    log.warning(
+                        f"Could not parse property {name!r} as {entity_property.type!r}: {type(exc).__name__}"
+                    )
                     resolved_value = value
 
             properties[name] = _MaltegoEntityProperty(
@@ -1590,6 +1604,11 @@ class MaltegoEntity(Observable, metaclass=MaltegoEntityMeta):
                 if updated_entity.properties is None:
                     updated_entity.properties = []
                 updated_entity.properties.extend(updated_property_value)
+            elif updated_property_name in LIST_UPDATE_KEYS and isinstance(updated_property_value, list):
+                setattr(updated_entity, updated_property_name, [
+                    item.to_v3_overlay() if isinstance(item, Overlay) else item.to_v3_display_information()
+                    for item in updated_property_value
+                ])
             elif isinstance(updated_property_value, Overlay):
                 updated_property_value = [updated_property_value.to_v3_overlay()]
                 setattr(updated_entity, updated_property_name, updated_property_value)
@@ -1648,13 +1667,13 @@ def coerce_property_type_from_value(value: Any, type_: Type[Any]) -> Any:
         if not isinstance(value, str):
             raise TypeError(f"Cannot parse {type(value)} with dateutil")
         _assert_date_str_len(value, "DATE_TIME")
-        return dateutil.parser.parse(value)
+        return parse_datetime_str(value)
 
     if issubclass(type_, datetime.date):
         if not isinstance(value, str):
             raise TypeError(f"Cannot parse {type(value)} with dateutil")
         _assert_date_str_len(value, "DATE")
-        return dateutil.parser.parse(value).date()
+        return parse_datetime_str(value).date()
 
     if issubclass(type_, daterange):
         if isinstance(value, str):

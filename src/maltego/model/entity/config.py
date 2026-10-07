@@ -49,9 +49,24 @@ class MaltegoEntityConfig:
             actions: Optional[List[MaltegoEntityAction]] = None,
             variant_property: Optional[str] = None,
             variant_icon_property: Optional[str] = None,
+            variant_label_property: Optional[str] = None,
     ):
         self.value_property = str(value_property) if value_property is not None else None
-        self.variant_property = str(variant_property) if variant_property is not None else None
+        legacy_variant_label_property = str(variant_property) if variant_property is not None else None
+        canonical_variant_label_property = (
+            str(variant_label_property) if variant_label_property is not None else None
+        )
+        if (
+                legacy_variant_label_property is not None
+                and canonical_variant_label_property is not None
+                and legacy_variant_label_property != canonical_variant_label_property
+        ):
+            raise ValueError("variant_property and variant_label_property must match when both are set")
+        self.variant_label_property = (
+            canonical_variant_label_property
+            if canonical_variant_label_property is not None
+            else legacy_variant_label_property
+        )
         self.variant_icon_property = str(variant_icon_property) if variant_icon_property is not None else None
         self.value_key = str(value_key) if value_key is not None else None
         self.display_name = str(display_name)
@@ -98,7 +113,7 @@ class MaltegoEntityConfig:
     def copy(self) -> "MaltegoEntityConfig":
         config = MaltegoEntityConfig(
             value_property=self.value_property,
-            variant_property=self.variant_property,
+            variant_label_property=self.variant_label_property,
             variant_icon_property=self.variant_icon_property,
             display_name=self.display_name,
             description=self._description,
@@ -112,7 +127,7 @@ class MaltegoEntityConfig:
             display_property=self.display_property,
             _visible=self._visible,
             converter=self.converter,
-            actions=self.actions
+            actions=self.actions,
         )
         config.set_base_entities(self.get_base_entities().copy())
         return config
@@ -120,7 +135,7 @@ class MaltegoEntityConfig:
     def merge_with(self, other: "MaltegoEntityConfig") -> "MaltegoEntityConfig":
         merged = MaltegoEntityConfig(
             value_property=self.value_property or other.value_property,
-            variant_property=self.variant_property or other.variant_property,
+            variant_label_property=self.variant_label_property or other.variant_label_property,
             variant_icon_property=self.variant_icon_property or other.variant_icon_property,
             value_key=self.value_key or other.value_key,
             display_name=self.display_name or other.display_name,
@@ -152,6 +167,11 @@ class MaltegoEntityConfig:
             f"{self.icon_name=} "
             f")"
         )
+
+    @property
+    def variant_property(self) -> Optional[str]:
+        """Alias of ``variant_label_property``."""
+        return self.variant_label_property
 
     @property
     def category(self) -> str:

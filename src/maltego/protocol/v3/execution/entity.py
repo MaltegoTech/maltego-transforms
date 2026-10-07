@@ -5,7 +5,7 @@ from enum import Enum
 from typing import List, Optional
 import logging
 
-from fastapi_restful.api_model import APIModel
+from maltego.protocol.api_model import APIModel
 from maltego.protocol.v3.execution.property import Property
 
 log = logging.getLogger(__name__)

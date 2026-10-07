@@ -3,6 +3,7 @@ from enum import Enum
 from typing import Any, Dict, Literal, Type, TypeVar, Union, Optional, List
 from datetime import date, datetime, timezone
 import logging
+import re
 import dateutil.parser
 
 log = logging.getLogger(__name__)
@@ -22,6 +23,29 @@ class AttributeNames:
     composite_link = "composite"
 
 
+# Maltego clients may send date/time values as Unix epoch timestamps
+# (milliseconds, e.g. "1696175006000") instead of ISO-8601 strings. dateutil
+# rejects those (OverflowError / "year ... is out of range"). Compact ISO forms
+# such as "20230717" are also all digits and dateutil parses them correctly, so
+# epoch handling is only a fallback for digit strings dateutil cannot parse.
+_EPOCH_MILLIS_THRESHOLD = 100_000_000_000  # |value| >= 1e11 → milliseconds (1e11 s is year ~5138)
+_EPOCH_RE = re.compile(r"[+-]?\d+(\.\d+)?")
+
+
+def parse_datetime_str(value: str) -> datetime:
+    """Parse a date string with dateutil, falling back to epoch seconds/milliseconds."""
+    try:
+        return dateutil.parser.parse(value)
+    except (OverflowError, ValueError):
+        stripped = value.strip()
+        if not _EPOCH_RE.fullmatch(stripped):
+            raise
+    timestamp = float(stripped)
+    if abs(timestamp) >= _EPOCH_MILLIS_THRESHOLD:
+        timestamp /= 1000
+    return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+
+
 def normalize_date(date_or_datetime: Optional[Union[datetime, date]]) -> Union[datetime, date]:
     if isinstance(date_or_datetime, datetime):
         return date_or_datetime.astimezone(timezone.utc)
@@ -32,8 +56,7 @@ def normalize_date(date_or_datetime: Optional[Union[datetime, date]]) -> Union[d
 
 def to_str_format(date_or_datetime: Union[date, datetime]) -> str:
     if isinstance(date_or_datetime, datetime):
-        assert date_or_datetime.tzinfo == timezone.utc
-        return date_or_datetime.isoformat(timespec="milliseconds").replace('+00:00', 'Z')
+        return normalize_date(date_or_datetime).isoformat(timespec="milliseconds").replace('+00:00', 'Z')
     if isinstance(date_or_datetime, date):
         return date_or_datetime.isoformat()
     raise TypeError(
@@ -102,10 +125,10 @@ class daterange:  # pylint: disable=invalid-name
             if start is None or end is None:
                 raise ValueError(
                     "Must specify both 'start' and 'end' (or 'date_range')")
-            if start > end:
-                log.warning("Start date is later than end date!")
         self.start = normalize_date(start) if start is not None else None
         self.end = normalize_date(end) if end is not None else None
+        if self.start is not None and self.end is not None and self.start > self.end:
+            log.warning("Start date is later than end date!")
         self.range = date_range
 
     def __str__(self) -> str:
@@ -138,8 +161,8 @@ class daterange:  # pylint: disable=invalid-name
                 log.warning(
                     f"strptime unable to parse date string: {exception}")
         else:
-            start = dateutil.parser.parse(dates[0])
-            end = dateutil.parser.parse(dates[1])
+            start = parse_datetime_str(dates[0])
+            end = parse_datetime_str(dates[1])
             return daterange(
                 start=start,
                 end=end

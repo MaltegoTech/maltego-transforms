@@ -17,6 +17,7 @@ from maltego.model.event import (
 )
 from maltego.model.exception import (
     MaltegoException,
+    MaltegoHTTPClientError,
     MaltegoHTTPInputEntityMalformed,
     MaltegoHTTPServerError,
     MaltegoTransformTimeoutError,
@@ -125,8 +126,7 @@ class MultiplexedTransformResultSet:
         for r in self.results:
             r.state = value
 
-    @exceptions.setter
-    def push_exception(self, exception: MaltegoException):
+    def push_exception(self, exception: MaltegoException) -> None:
         for r in self.results:
             r.push_exception(exception)
 
@@ -185,6 +185,8 @@ class MultiplexedTransformExecutionContext:
             )
             for transform_input in transform_inputs
         )
+        if not self.contexts:
+            raise ValueError("MultiplexedTransformExecutionContext requires at least one transform input")
         self.__result = MultiplexedTransformResultSet(c.result for c in self.contexts)
 
     def v3_request(self) -> bool:
@@ -349,8 +351,9 @@ class TransformExecutionContext:
             self.result.context.log.partial(warning.message)
             self.result.code = warning.classic_status_code
         except MaltegoException as ex:
-            log.error(
-                f"Transform threw {type(ex).__name__}: {ex.message}")
+            # Client errors (bad input, not found, unauthorized) are expected user-facing outcomes.
+            log_fn = log.warning if isinstance(ex, MaltegoHTTPClientError) else log.error
+            log_fn(f"Transform threw {type(ex).__name__}: {ex.message}")
             self.result.push_exception(ex)
             if isinstance(ex, MaltegoHTTPServerError):
                 self.result.code = ex.status_code

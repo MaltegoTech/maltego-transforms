@@ -4,7 +4,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 import datetime
-from fastapi_restful.api_model import APIModel
+from maltego.protocol.api_model import APIModel
 
 from maltego.model.types import daterange, to_str_format
 from maltego.protocol.v3.discovery.auth import V3OAuthServiceDefinition

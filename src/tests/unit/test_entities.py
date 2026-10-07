@@ -309,25 +309,26 @@ def test_entity_config_casting():
     assert invalid.visible == getattr(invalid, "_visible") == True
 
 
-def test_entity_config_variant_property_references() -> None:
+def test_entity_config_variant_label_property_references() -> None:
     config = MaltegoEntityConfig(
         value_property="value",
         display_name="Variant",
-        variant_property=1,  # type: ignore[arg-type]
+        variant_label_property=1,  # type: ignore[arg-type]
         variant_icon_property=2,  # type: ignore[arg-type]
     )
 
+    assert config.variant_label_property == "1"
     assert config.variant_property == "1"
     assert config.variant_icon_property == "2"
 
     copied = config.copy()
-    assert copied.variant_property == "1"
+    assert copied.variant_label_property == "1"
     assert copied.variant_icon_property == "2"
 
     parent = MaltegoEntityConfig(
         value_property="value",
         display_name="Parent",
-        variant_property="parent.variant",
+        variant_label_property="parent.variant",
         variant_icon_property="parent.icon",
     )
     child = MaltegoEntityConfig(
@@ -337,8 +338,28 @@ def test_entity_config_variant_property_references() -> None:
     )
 
     merged = child.merge_with(parent)
-    assert merged.variant_property == "parent.variant"
+    assert merged.variant_label_property == "parent.variant"
     assert merged.variant_icon_property == "child.icon"
+
+
+def test_entity_config_accepts_variant_property_as_label_alias() -> None:
+    config = MaltegoEntityConfig(
+        value_property="value",
+        display_name="Variant",
+        variant_property=1,  # type: ignore[arg-type]
+    )
+
+    assert config.variant_label_property == "1"
+
+
+def test_entity_config_rejects_conflicting_variant_label_aliases() -> None:
+    with pytest.raises(ValueError, match="variant_property"):
+        MaltegoEntityConfig(
+            value_property="value",
+            display_name="Variant",
+            variant_property="former",
+            variant_label_property="canonical",
+        )
 
 
 def test_entity_config_positional_arguments_remain_compatible() -> None:
@@ -347,7 +368,7 @@ def test_entity_config_positional_arguments_remain_compatible() -> None:
     assert config.value_property == "value"
     assert config.value_key == "value-key"
     assert config.display_name == "Display"
-    assert config.variant_property is None
+    assert config.variant_label_property is None
     assert config.variant_icon_property is None
 
 
@@ -944,3 +965,47 @@ def test_namespace_annotations_reads_materialized_and_lazy() -> None:
         assert result == {"y": str}
     else:
         assert result == {}
+
+
+@pytest.mark.parametrize("value, expected", [
+    # epoch milliseconds, as sent by Maltego clients (prod regression: OverflowError in dateutil)
+    ("1696175006000", datetime.datetime(2023, 10, 1, 15, 43, 26, tzinfo=datetime.timezone.utc)),
+    ("1574040671000", datetime.datetime(2019, 11, 18, 1, 31, 11, tzinfo=datetime.timezone.utc)),
+    ("1696175006123", datetime.datetime(2023, 10, 1, 15, 43, 26, 123000, tzinfo=datetime.timezone.utc)),
+    # epoch seconds
+    ("1696175006", datetime.datetime(2023, 10, 1, 15, 43, 26, tzinfo=datetime.timezone.utc)),
+    ("-86400", datetime.datetime(1969, 12, 31, tzinfo=datetime.timezone.utc)),
+    # ISO strings unchanged, including all-digit compact forms dateutil already parses
+    ("2023-07-17T21:52:59.050Z", datetime.datetime(2023, 7, 17, 21, 52, 59, 50000, tzinfo=datetime.timezone.utc)),
+    # dateutil returns naive datetimes for offset-less input; that behaviour is unchanged
+    ("20230717", datetime.datetime(2023, 7, 17)),  # noqa: DTZ001
+    ("202307171543", datetime.datetime(2023, 7, 17, 15, 43)),  # noqa: DTZ001
+    ("20230717154326", datetime.datetime(2023, 7, 17, 15, 43, 26)),  # noqa: DTZ001
+])
+def test_parse_str_type_to_value_datetime_epoch_and_iso(value, expected):
+    from maltego.model.entity import coerce_property_type_from_value, parse_str_type_to_value
+    assert parse_str_type_to_value(value, "DATE_TIME") == expected
+    assert parse_str_type_to_value(value, "DATE") == expected.date()
+    assert coerce_property_type_from_value(value, datetime.datetime) == expected
+
+
+def test_parse_str_type_to_value_drops_empty_items_in_date_lists():
+    from maltego.model.entity import parse_str_type_to_value
+    parsed = parse_str_type_to_value(["1696175006000", "", None], "DATE_TIME")
+    assert parsed == [datetime.datetime(2023, 10, 1, 15, 43, 26, tzinfo=datetime.timezone.utc)]
+    assert parse_str_type_to_value(["a", ""], "STRING") == ["a", ""]
+
+
+def test_from_v3_run_entity_unparseable_property_warns_without_raw_value(caplog):
+    from maltego.protocol.v3.execution.entity import TransformRunEntity
+    from maltego.protocol.v3.execution.property import Property
+    run_entity = TransformRunEntity(
+        id="1", type="maltego.Phrase",
+        properties=[Property(name="seen", type="DATE_TIME", value="secret-not-a-date")],
+    )
+    with caplog.at_level("WARNING"):
+        entity = MaltegoEntity.from_v3_run_entity(run_entity)
+    assert entity.get_properties()["seen"].value == "secret-not-a-date"
+    assert "secret-not-a-date" not in caplog.text
+    records = [r for r in caplog.records if "seen" in r.getMessage()]
+    assert records and all(r.levelname == "WARNING" and r.exc_info is None for r in records)

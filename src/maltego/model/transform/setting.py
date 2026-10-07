@@ -18,13 +18,11 @@ import warnings
 _SETTING_NAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,127}$")
 
 from datetime import date, datetime
-from dateutil.parser import parse as dateutil_parse
-from dateutil.parser import ParserError
 
 from maltego.model.types import (
-    MaltegoSettingDateTypes, MaltegoSettingPrimitiveTypes, MaltegoSettingPrimitiveTypesList,
+    MaltegoSettingDateTypes, MaltegoSettingPrimitiveTypesList,
     MaltegoSettingTypes, MaltegoSettingDateTypesList,
-    daterange, normalize_date, to_str_format
+    daterange, parse_datetime_str, normalize_date, to_str_format
 )
 from maltego.protocol.v3.discovery.transform import V3TransformSetting, serialize_daterange
 
@@ -52,6 +50,16 @@ def convert_transform_setting_value(
         return str(setting_value)
 
     return setting_value
+
+
+_BOOL_STRINGS = {"true": True, "false": False, "1": True, "0": False}
+
+
+def _parse_bool(value: Any) -> bool | None:
+    """Parse a boolean setting value; strings must be 'true'/'false'/'1'/'0' (any case), else None."""
+    if isinstance(value, str):
+        return _BOOL_STRINGS.get(value.strip().lower())
+    return bool(value)
 
 
 def normalize_setting_values(value: MaltegoSettingTypes) -> MaltegoSettingTypes:
@@ -153,7 +161,7 @@ class TransformSetting:
     ) -> Optional[MaltegoSettingDateTypes]:
         try:
             return daterange.fromstring_v3(value)
-        except (ParserError, TypeError, ValueError) as e:
+        except (TypeError, ValueError, OverflowError, OSError) as e:
             log.warning(f"Could not parse daterange value '{value}': {e}")
             return None
 
@@ -162,8 +170,8 @@ class TransformSetting:
             value: str,
     ) -> Optional[MaltegoSettingDateTypes]:
         try:
-            return normalize_date(dateutil_parse(value))
-        except ParserError:
+            return normalize_date(parse_datetime_str(value))
+        except (ValueError, OverflowError, OSError):
             return None
 
     def _coerce_date_setting_type_from_str_value(
@@ -171,8 +179,8 @@ class TransformSetting:
             value: str,
     ) -> Optional[MaltegoSettingDateTypes]:
         try:
-            return normalize_date(dateutil_parse(value).date())
-        except ParserError:
+            return normalize_date(parse_datetime_str(value).date())
+        except (ValueError, OverflowError, OSError):
             return None
 
     def _coerce_all_date_setting_type_from_str_value(
@@ -192,36 +200,6 @@ class TransformSetting:
             return self._coerce_daterange_setting_type_from_str_value(value)
 
         return None
-
-    def _coerce_primitive_setting_type_from_str_value(
-        self,
-        value: str,
-        overwrite_type: Optional["TransformSetting.Types"] = None
-    ) -> Optional[MaltegoSettingPrimitiveTypes]:
-        if overwrite_type is not None:
-            type_ = overwrite_type
-        else:
-            type_ = self.type
-        if type_ is TransformSetting.Types.boolean:  # bool subclasses int so we need to check it first
-            if value == "":
-                return None
-            return value in ("true", "True")
-
-        try:
-            if type_ is TransformSetting.Types.str:  # bool subclasses int so we need to check it first
-                return str(value)
-
-            if type_ is TransformSetting.Types.int:  # bool subclasses int so we need to check it first
-                return int(value)
-
-            if type_ is TransformSetting.Types.float:  # bool subclasses int so we need to check it first
-                return float(value)
-        except ValueError:
-            return None
-        raise ValueError(
-            f"Could not infer type {type_} for value {type(value)} "
-            "_coerce_primitive_setting_type_from_str_value expects str, int, float or boolean values"
-        )
 
     def _parse_date_list(
         self,
@@ -269,6 +247,11 @@ class TransformSetting:
     ) -> MaltegoSettingPrimitiveTypesList:
         parsed_list = []
         for elem in input_list:
+            if target_type is bool:
+                parsed_bool = _parse_bool(elem)
+                if parsed_bool is not None:
+                    parsed_list.append(parsed_bool)
+                continue
             try:
                 elem = target_type(elem)
                 assert isinstance(elem, target_type)
@@ -313,7 +296,11 @@ class TransformSetting:
             TransformSetting.Types.int, TransformSetting.Types.float
         ):
             try:
-                if issubclass(setting_type, (bool, int, float, str)) and isinstance(value, (bool, int, float, str)):
+                if not isinstance(value, (bool, int, float, str)):
+                    return None
+                if setting_type is bool:
+                    return _parse_bool(value)
+                if issubclass(setting_type, (int, float, str)):
                     return setting_type(value)
                 return None
             except ValueError:

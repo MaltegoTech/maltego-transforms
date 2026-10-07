@@ -1,9 +1,11 @@
 # Copyright (c) Maltego Technologies GmbH.
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict
 
 import pytest
+from dateutil.tz import tzutc
 
+from maltego.model.link import MaltegoLinkProperty
 from maltego.server import MaltegoLink
 from maltego.model.types import LinkColor, LinkStyle, LinkThickness, daterange
 from maltego._helper import create_maltego_id
@@ -137,3 +139,17 @@ def test_enum_link_thickness():
     # Test set using an enum value
     link.thickness = LinkThickness.THICKNESS_2
     assert link.thickness is LinkThickness.THICKNESS_2.value
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        # naive datetimes follow the same (host local time) convention as entity properties
+        (datetime(2024, 1, 2, 3, 4, 5), datetime(2024, 1, 2, 3, 4, 5).astimezone(timezone.utc).strftime(  # noqa: DTZ001
+            "%Y-%m-%dT%H:%M:%S.000Z")),
+        (datetime(2024, 1, 2, 3, 4, 5, tzinfo=timezone(timedelta(hours=2))), "2024-01-02T01:04:05.000Z"),
+        (datetime(2024, 1, 2, 3, 4, 5, tzinfo=tzutc()), "2024-01-02T03:04:05.000Z"),
+    ],
+)
+def test_link_datetime_property_is_normalized_to_utc(value: datetime, expected: str):
+    assert MaltegoLinkProperty(name="seen", value=value).to_v3_link_property().value == expected
