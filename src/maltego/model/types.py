@@ -32,8 +32,7 @@ def normalize_date(date_or_datetime: Optional[Union[datetime, date]]) -> Union[d
 
 def to_str_format(date_or_datetime: Union[date, datetime]) -> str:
     if isinstance(date_or_datetime, datetime):
-        assert date_or_datetime.tzinfo == timezone.utc
-        return date_or_datetime.isoformat(timespec="milliseconds").replace('+00:00', 'Z')
+        return normalize_date(date_or_datetime).isoformat(timespec="milliseconds").replace('+00:00', 'Z')
     if isinstance(date_or_datetime, date):
         return date_or_datetime.isoformat()
     raise TypeError(
