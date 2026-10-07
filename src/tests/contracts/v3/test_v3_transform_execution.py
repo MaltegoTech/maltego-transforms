@@ -1,4 +1,5 @@
 # Copyright (c) Maltego Technologies GmbH.
+import logging
 import time
 import typing
 from unittest.mock import patch, MagicMock
@@ -331,6 +332,51 @@ async def test_prompt_response_keeps_protocol_and_state_headers(
     assert result.headers["maltego-protocol-version"] == "3.3"
     assert result.headers["maltego-run-state"] == ExecutionState.COMPLETED.value
 
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "error, expected_status",
+    [(ValueError("prompt-123 already answered"), 400), (KeyError("run-123"), 404)],
+)
+async def test_prompt_response_rejection_logs_reason_at_warning(
+    mock_server_example: MaltegoTransformServer,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    error: Exception,
+    expected_status: int,
+) -> None:
+    server = mock_server_example.v3server
+    assert server is not None
+
+    class FakeRunner:
+        def result(self, run_id: str) -> typing.Any:
+            return type("FakeResult", (), {"state": ExecutionState.RUNNING})()
+
+        async def prompt_response(self, run_id: str, prompt_id: str, transform_prompt_response: typing.Any) -> None:
+            raise error
+
+    monkeypatch.setattr(server, "transform_runner", FakeRunner())
+    # Server fixtures reconfigure logging, which can disable/detach this logger.
+    server_logger = logging.getLogger("maltego.server.v3")
+    monkeypatch.setattr(server_logger, "disabled", False)
+    monkeypatch.setattr(server_logger, "handlers", [caplog.handler])
+
+    with pytest.raises(fastapi.HTTPException) as exc_info:
+        await server.post_prompt_response(
+            transform_id=f"{PREFIX}.{NAMESPACE}.transform",
+            run_id="run-123",
+            prompt_id="prompt-123",
+            response=fastapi.Response(),
+            transform_run_prompt_response=TransformRunPromptResponse(
+                reason="COMPLETED",
+                result={"choice": "A"},
+            ),
+            maltego_protocol_version=None,
+        )
+
+    assert exc_info.value.status_code == expected_status
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert any(type(error).__name__ in r.getMessage() and "run-123" in r.getMessage() for r in warnings)
 
 @pytest.mark.asyncio
 async def test_run_transform_wrong_input_entity_type(async_client_example_server: httpx.AsyncClient,
