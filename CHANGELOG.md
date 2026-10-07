@@ -31,6 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   logs and survives failures, and is cancelled on shutdown before the runner
   shuts down.
 
+- `scheduled_cleanup_seconds` passed to `setup()`/`run_server(settings=...)` is
+  now applied to the scheduled cleanup interval and the runner's retention time.
+  Previously the module-level server kept the 60 s default, so completed runs
+  that went unpolled for 60 s were marked timed out, whatever the configured
+  value.
+- The scheduled cleanup now also reaps stale runs of servers attached with
+  `concat_server()`. Previously their runs were never cleaned up.
+
 ### Removed
 
 - The `fastapi-restful` dependency, and with it the transitive `psutil<6`
