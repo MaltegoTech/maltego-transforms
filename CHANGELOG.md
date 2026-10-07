@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (case-insensitive) and `"1"`/`"0"` strings correctly; previously any
   non-empty string, including `"false"` and `"0"`, became `True`. Other strings
   (e.g. `"yes"`) are treated as invalid: `None`, or dropped from a list.
+- `datetime` link property values that are naive, non-UTC, or use
+  `dateutil.tz.tzutc()` are now normalized to UTC (as entity properties already
+  are) instead of failing with an `AssertionError`.
 
 ## 1.1.1 - 2026-09-25
 
