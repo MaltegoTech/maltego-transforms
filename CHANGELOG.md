@@ -39,6 +39,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The scheduled cleanup now also reaps stale runs of servers attached with
   `concat_server()`. Previously their runs were never cleaned up.
 
+- v3 clients no longer lose entity updates. An UPDATE that arrived after a
+  results poll was merged into the event that poll had already served, so
+  `eventCount` did not grow and clients, which page forward and never re-read,
+  never received it. Updates are now merged only into events gathered in the
+  same pass; an update after a poll is a new event. Updates between two polls
+  are still combined into one event.
+- Merged UPDATE events now keep every display field and overlay. Previously a
+  second display field or overlay added between two polls replaced the first,
+  so clients received only the last one.
+
 ### Removed
 
 - The `fastapi-restful` dependency, and with it the transitive `psutil<6`

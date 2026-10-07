@@ -4,7 +4,7 @@ from typing import List, Union, Optional
 from queue import Queue, Empty
 
 from maltego.model.context import MaltegoContext
-from maltego.model.entity import MaltegoEntity
+from maltego.model.entity import LIST_UPDATE_KEYS, MaltegoEntity
 from maltego.model.event import TransformEvent, TransformEventOperationType, TransformEntityEvent, \
     TransformMessageEvent, TransformLinkEvent
 from maltego.model.exception import MaltegoException
@@ -54,13 +54,16 @@ class TransformResultSet:
         return result
 
     def __gather(self) -> None:
+        # A client may already have been served any event gathered by an earlier
+        # call, and clients never re-read. Only merge into events added here.
+        first_unserved = len(self.output)
         while True:
             event = None
             try:
                 event = self.output_queue.get_nowait()
             except Empty:
                 break
-            if event.is_update() and len(self.output) > 0:
+            if event.is_update() and len(self.output) > first_unserved:
                 last_event_id = self.output[-1].get_id()
                 next_event_id = event.get_id()
                 if last_event_id == next_event_id:
@@ -81,7 +84,12 @@ class TransformResultSet:
                 next_event.updates is not None and '_properties' in next_event.updates:
             self.merge_property_updates(curr_event, next_event)
         elif curr_event.updates is not None and next_event.updates is not None:
-            curr_event.updates.update(next_event.updates)
+            for key, value in next_event.updates.items():
+                if key in LIST_UPDATE_KEYS and key in curr_event.updates:
+                    previous = curr_event.updates[key]
+                    curr_event.updates[key] = [*(previous if isinstance(previous, list) else [previous]), value]
+                else:
+                    curr_event.updates[key] = value
 
     @staticmethod
     def merge_property_updates(

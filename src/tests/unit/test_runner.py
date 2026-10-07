@@ -14,6 +14,8 @@ from maltego.model.entity import (
     MaltegoEntity,
     MaltegoEntityConfig,
     MaltegoEntityProperty,
+    OverlayPositions,
+    OverlayTypes,
 )
 from maltego.model.event import (
     TransformEntityEvent,
@@ -1153,3 +1155,62 @@ async def test_multiplexed_logs_land_with_their_input():
         for ctx in mux.contexts
     ]
     assert messages == [["not found: a"], [], ["not found: c"]]
+
+
+def test_update_after_a_poll_is_appended_and_the_served_event_is_unchanged(transform_result_set):
+    """A client pages forward and never re-reads, so a served event must not absorb a later update."""
+    entity = MockEntity("foo")
+    transform_result_set.output_queue.put(create_mock_entity_add_event(entity))
+    transform_result_set.output_queue.put(create_mock_entity_update_event(entity, updates={"note": "first"}))
+    served = list(transform_result_set.get_results())
+
+    transform_result_set.output_queue.put(create_mock_entity_update_event(entity, updates={"note": "second"}))
+    results = transform_result_set.get_results()
+
+    assert transform_result_set.event_count == 3
+    assert results[:2] == served
+    assert results[1].updates == {"note": "first"}
+    assert results[2].operation_type == TransformEventOperationType.UPDATE
+    assert results[2].updates == {"note": "second"}
+
+
+def _observed_entity(result_set: TransformResultSet) -> MockEntity:
+    graph = MaltegoGraph()
+    graph.register(TransformGraphObserver(result_set.output_queue, "run"))
+    entity = MockEntity("foo")
+    graph.add_entity(entity)
+    return entity
+
+
+def test_display_fields_and_overlays_merged_in_one_pass_are_all_rendered(transform_result_set):
+    entity = _observed_entity(transform_result_set)
+    transform_result_set.get_results()  # the ADD is served before the updates
+
+    entity.add_display_field_html("Partial Intelligence", "<b>a</b>")
+    entity.add_display_field_html("Partial Identifiers", "<b>b</b>")
+    entity.add_overlay(OverlayTypes.TEXT, OverlayPositions.NORTH, "first")
+    entity.add_overlay(OverlayTypes.TEXT, OverlayPositions.SOUTH, "second")
+    results = transform_result_set.get_results()
+
+    assert len(results) == 2
+    update = results[1].to_v3_event().data.entity
+    assert [field.name for field in update.display_information] == ["Partial Intelligence", "Partial Identifiers"]
+    assert [overlay.property_name for overlay in update.overlays] == ["first", "second"]
+
+
+def test_multiplexed_child_update_after_the_parent_copied_its_event_gets_a_new_index():
+    child, other = _new_result_set(), _new_result_set()
+    entity = MockEntity("foo")
+    child.output_queue.put(create_mock_entity_add_event(entity))
+    child.output_queue.put(create_mock_entity_update_event(entity, updates={"note": "first"}))
+    other.output_queue.put(create_mock_entity_add_event(MockEntity("bar")))
+    mux = MultiplexedTransformResultSet([child, other])
+    served = list(mux.get_results())
+
+    child.output_queue.put(create_mock_entity_update_event(entity, updates={"note": "second"}))
+    results = mux.get_results()
+
+    assert results[:3] == served
+    assert served[1].updates == {"note": "first"}
+    assert len(results) == 4
+    assert results[3].updates == {"note": "second"}
