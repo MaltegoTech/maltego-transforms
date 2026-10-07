@@ -544,21 +544,18 @@ class MaltegoTransformServer:
 
         self.app.openapi = custom_openapi
 
-        if not self._settings.swagger_enabled:
-            # Strip FastAPI's built-in /openapi.json route so the endpoint is unreachable.
-            self.app.router.routes = [
-                r for r in self.app.router.routes
-                if getattr(r, "path", None) != "/openapi.json"
-            ]
-            return
-
-        # Strip FastAPI's default /openapi.json route (methods=None, no auth) before registering
-        # our auth-protected version. Without this, the default route matches first in Starlette's
-        # route resolution and the auth dependency is never invoked.
+        # Strip FastAPI's built-in OpenAPI route (no auth). It lives at app.openapi_url, which
+        # API_OPENAPI_URL can move away from /openapi.json, so strip both paths. With swagger
+        # enabled, the auth-protected /openapi.json below must also not be shadowed by it, since
+        # the built-in route would match first in Starlette's route resolution.
+        # openapi_url is None with API_DISABLE_DOCS; never match path-less routes.
+        builtin_paths = {"/openapi.json", self.app.openapi_url} - {None}
         self.app.router.routes = [
             r for r in self.app.router.routes
-            if getattr(r, "path", None) != "/openapi.json"
+            if getattr(r, "path", None) not in builtin_paths
         ]
+        if not self._settings.swagger_enabled:
+            return
 
         @self.app.get("/openapi.json", include_in_schema=False, dependencies=[fastapi.Depends(optional_auth)])
         async def openapi_spec() -> Dict[str, Any]:

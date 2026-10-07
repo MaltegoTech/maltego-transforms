@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Security
+
+- FastAPI's built-in OpenAPI route is now removed at whatever path
+  `API_OPENAPI_URL` configures. Previously only a route at `/openapi.json`
+  was removed, so a custom `API_OPENAPI_URL` served the full OpenAPI document
+  without authentication, even with `swagger_enabled=False`. With
+  `swagger_enabled=True` the document is served only at the auth-protected
+  `/openapi.json`.
+
 ### Fixed
 
 - The server now finishes application startup under uvicorn. With

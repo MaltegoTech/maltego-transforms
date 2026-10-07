@@ -711,3 +711,26 @@ def test_swagger_enabled_registers_openapi_and_swagger_with_auth_dependency():
             )
     finally:
         server.runner.shutdown()
+
+
+@pytest.mark.parametrize("swagger_enabled", [False, True])
+def test_api_openapi_url_does_not_expose_unauthenticated_spec(monkeypatch, swagger_enabled):
+    """F25/F70 — API_OPENAPI_URL moves FastAPI's built-in, unauthenticated spec
+    route away from /openapi.json; it must be stripped at its configured path
+    too, leaving the auth-protected /openapi.json as the only spec route."""
+    from fastapi.routing import APIRoute
+    from starlette.testclient import TestClient
+
+    monkeypatch.setenv("API_OPENAPI_URL", "/custom-openapi.json")
+    server = _build_real_server(swagger_enabled=swagger_enabled)
+    try:
+        assert _find_route(server.app, "/custom-openapi.json") is None
+        assert TestClient(server.app).get("/custom-openapi.json").status_code == 404
+
+        openapi_route = _find_route(server.app, "/openapi.json")
+        if swagger_enabled:
+            assert isinstance(openapi_route, APIRoute)
+        else:
+            assert openapi_route is None
+    finally:
+        server.runner.shutdown()
