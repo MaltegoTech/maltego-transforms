@@ -1591,13 +1591,13 @@ class V3Server:
                 raise timeout_exception
             await self.transform_runner.prompt_response(run_id, prompt_id, transform_prompt_response)
         except ValueError as e:
-            log.debug("Validation error submitting prompt response: %s", e)
+            log.warning("Rejected prompt response for run_id=%s: %s: %s", run_id, type(e).__name__, e)
             raise fastapi.HTTPException(
                 status_code=fastapi.status.HTTP_400_BAD_REQUEST,
                 detail="Invalid input.",
             )
         except KeyError as e:
-            log.debug("Execution context not found for run_id=%s: %s", run_id, e)
+            log.warning("Execution context not found for prompt response run_id=%s: %s: %s", run_id, type(e).__name__, e)
             key_error = fastapi.HTTPException(
                 status_code=fastapi.status.HTTP_404_NOT_FOUND,
                 detail="Resource not found.",

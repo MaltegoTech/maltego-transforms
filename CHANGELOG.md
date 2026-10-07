@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as raw strings. Strings dateutil already parses are unchanged.
 - v3 run requests rejected with 400 `Invalid input.` now log the reason at
   WARNING instead of DEBUG, so rejected runs can be diagnosed.
+- v3 prompt responses rejected with 400 `Invalid input.` or 404 `Resource not
+  found.` now log the reason at WARNING instead of DEBUG.
 
 ## 1.1.1 - 2026-09-25
 
