@@ -97,6 +97,11 @@ ALL_ENTITY_TYPES = "maltego.Unknown"
 
 COMPOSITE_ATTR = "__maltego_is_composite__"
 
+# Update keys whose notifications carry one new item each (see
+# `_add_display_label_or_field` and `add_overlay`), not the whole value. Merged
+# UPDATE events keep every item as a list, and `to_v3_run_entity_update` renders it.
+LIST_UPDATE_KEYS = ("display_information", "overlays")
+
 log = logging.getLogger(__name__)
 
 def _has_union(t) -> bool:
@@ -1599,6 +1604,11 @@ class MaltegoEntity(Observable, metaclass=MaltegoEntityMeta):
                 if updated_entity.properties is None:
                     updated_entity.properties = []
                 updated_entity.properties.extend(updated_property_value)
+            elif updated_property_name in LIST_UPDATE_KEYS and isinstance(updated_property_value, list):
+                setattr(updated_entity, updated_property_name, [
+                    item.to_v3_overlay() if isinstance(item, Overlay) else item.to_v3_display_information()
+                    for item in updated_property_value
+                ])
             elif isinstance(updated_property_value, Overlay):
                 updated_property_value = [updated_property_value.to_v3_overlay()]
                 setattr(updated_entity, updated_property_name, updated_property_value)
