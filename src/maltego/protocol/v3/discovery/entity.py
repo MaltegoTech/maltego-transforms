@@ -44,7 +44,7 @@ class V3EntityDefinition(APIModel):
     display_name: str
     display_name_plural: str
     icon_resource: str
-    variant_property: Optional[str] = None
+    variant_label_property: Optional[str] = None
     variant_icon_property: Optional[str] = None
     description: Optional[str] = None
     category: str = 'Personal'
