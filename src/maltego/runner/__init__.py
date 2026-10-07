@@ -148,40 +148,46 @@ class TransformRunner:
         delta = now - datetime.timedelta(seconds=self.retention_time)
 
         for run_id in run_ids:
-            execution_context = self.__transform_queue.get(run_id)
-            if execution_context is not None:
-                if not execution_context.v3_request():
-                    continue
+            try:
+                self.__cleanup_run(run_id, now, delta)
+            except Exception:  # pylint: disable=broad-except # One broken run must not abort cleanup of the others
+                log.exception(f"Failed to clean up execution context {run_id}")
 
-                update_time = execution_context.result.update_time
-                last_fetch_time = execution_context.result.last_fetch_time
+    def __cleanup_run(self, run_id: str, now: datetime.datetime, delta: datetime.datetime) -> None:
+        execution_context = self.__transform_queue.get(run_id)
+        if execution_context is not None:
+            if not execution_context.v3_request():
+                return
 
-                # Skip inactivity timeout if waiting for prompt response
-                if execution_context.result.is_waiting_for_prompt():
-                    log.debug(
-                        f"Execution context {run_id} is waiting for prompt response, skipping inactivity check."
+            update_time = execution_context.result.update_time
+            last_fetch_time = execution_context.result.last_fetch_time
+
+            # Skip inactivity timeout if waiting for prompt response
+            if execution_context.result.is_waiting_for_prompt():
+                log.debug(
+                    f"Execution context {run_id} is waiting for prompt response, skipping inactivity check."
+                )
+                return
+
+            if update_time < delta and last_fetch_time < delta:
+                if execution_context.result.state == ExecutionState.TIMED_OUT:
+                    log.info(
+                        f"Execution context with id {run_id} has been timed out previously. Removing..."
                     )
-                    continue
-
-                if update_time < delta and last_fetch_time < delta:
-                    if execution_context.result.state == ExecutionState.TIMED_OUT:
-                        log.info(
-                            f"Execution context with id {run_id} has been timed out previously. Removing..."
+                    self.__try_delete(run_id)
+                else:
+                    log.info(
+                        f"Execution context with id {run_id} is older than {self.retention_time}s. "
+                        f"Marking as timed out."
+                    )
+                    execution_context.result.state = ExecutionState.TIMED_OUT
+                    execution_context.result.push_exception(
+                        MaltegoTransformTimeoutError(
+                            f"Transform execution timed out after being inactive for {self.retention_time}s.",
+                            code=410
                         )
-                        self.__try_delete(run_id)
-                    else:
-                        log.info(
-                            f"Execution context with id {run_id} is older than {self.retention_time}s. "
-                            f"Marking as timed out."
-                        )
-                        execution_context.result.state = ExecutionState.TIMED_OUT
-                        execution_context.result.push_exception(
-                            MaltegoTransformTimeoutError(
-                                f"Transform execution timed out after being inactive for {self.retention_time}s.",
-                                code=410
-                            )
-                        )
-                        execution_context.result.update_time = now
+                    )
+                    execution_context.result.update_time = now
 
     def done(self, run_id: str) -> bool:
         """Indicates whether a transform execution is finished

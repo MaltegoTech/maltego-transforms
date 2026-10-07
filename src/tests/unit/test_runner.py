@@ -770,6 +770,40 @@ def test_cleanup_tolerates_run_deleted_during_cleanup_iteration():
     assert run_id not in runner._TransformRunner__transform_queue
 
 
+
+def test_cleanup_times_out_expired_multiplexed_run_and_continues_after_failure():
+    runner = create_test_runner(retention_time=1)
+    broken = MagicMock()
+    broken.run_id = "broken-run"
+    broken.v3_request.side_effect = RuntimeError("broken context")
+    runner._TransformRunner__add(broken)
+    mux = _multiplexed_run({"a": 200, "b": 200})
+    mux_id = runner._TransformRunner__add(mux)
+    single = create_v3_execution_context("single-run")
+    single_id = runner._TransformRunner__add(single)
+    for ctx in mux.contexts:
+        make_result_stale(ctx.result)
+    make_result_stale(single.result)
+
+    runner.cleanup()
+
+    assert mux.result.state == ExecutionState.TIMED_OUT
+    for ctx in mux.contexts:
+        assert [e.code for e in ctx.result.exceptions] == [410]
+        assert isinstance(ctx.result.exceptions[0], MaltegoTransformTimeoutError)
+    assert [e.code for e in single.result.exceptions] == [410]
+
+    for ctx in mux.contexts:
+        make_result_stale(ctx.result)
+    make_result_stale(single.result)
+    runner.cleanup()
+
+    queue = runner._TransformRunner__transform_queue
+    assert mux_id not in queue
+    assert single_id not in queue
+    assert "broken-run" in queue
+
+
 # ---------------------------------------------------------------------------
 # Top-level entity counts + incomplete-composite detection
 # ---------------------------------------------------------------------------

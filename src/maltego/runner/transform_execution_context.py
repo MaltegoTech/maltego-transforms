@@ -126,8 +126,7 @@ class MultiplexedTransformResultSet:
         for r in self.results:
             r.state = value
 
-    @exceptions.setter
-    def push_exception(self, exception: MaltegoException):
+    def push_exception(self, exception: MaltegoException) -> None:
         for r in self.results:
             r.push_exception(exception)
 
