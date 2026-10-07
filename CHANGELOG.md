@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (milliseconds such as `"1696175006000"`, or seconds) now parse to UTC
   datetimes instead of failing with `OverflowError` and reaching the transform
   as raw strings. Strings dateutil already parses are unchanged.
+- v3 run requests rejected with 400 `Invalid input.` now log the reason at
+  WARNING instead of DEBUG, so rejected runs can be diagnosed.
 
 ## 1.1.1 - 2026-09-25
 
