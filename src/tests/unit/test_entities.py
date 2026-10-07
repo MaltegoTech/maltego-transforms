@@ -966,3 +966,25 @@ def test_parse_str_type_to_value_datetime_epoch_and_iso(value, expected):
     assert parse_str_type_to_value(value, "DATE_TIME") == expected
     assert parse_str_type_to_value(value, "DATE") == expected.date()
     assert coerce_property_type_from_value(value, datetime.datetime) == expected
+
+
+def test_parse_str_type_to_value_drops_empty_items_in_date_lists():
+    from maltego.model.entity import parse_str_type_to_value
+    parsed = parse_str_type_to_value(["1696175006000", "", None], "DATE_TIME")
+    assert parsed == [datetime.datetime(2023, 10, 1, 15, 43, 26, tzinfo=datetime.timezone.utc)]
+    assert parse_str_type_to_value(["a", ""], "STRING") == ["a", ""]
+
+
+def test_from_v3_run_entity_unparseable_property_warns_without_raw_value(caplog):
+    from maltego.protocol.v3.execution.entity import TransformRunEntity
+    from maltego.protocol.v3.execution.property import Property
+    run_entity = TransformRunEntity(
+        id="1", type="maltego.Phrase",
+        properties=[Property(name="seen", type="DATE_TIME", value="secret-not-a-date")],
+    )
+    with caplog.at_level("WARNING"):
+        entity = MaltegoEntity.from_v3_run_entity(run_entity)
+    assert entity.get_properties()["seen"].value == "secret-not-a-date"
+    assert "secret-not-a-date" not in caplog.text
+    records = [r for r in caplog.records if "seen" in r.getMessage()]
+    assert records and all(r.levelname == "WARNING" and r.exc_info is None for r in records)

@@ -359,21 +359,21 @@ class IntegrationClient:
                 return res
 
             if res.status_code == httpx.codes.UNAUTHORIZED:
-                log.error(f"Upstream API: {url_netloc} API key invalid ({httpx.codes.UNAUTHORIZED}).")
+                log.warning(f"Upstream API: {url_netloc} API key invalid ({httpx.codes.UNAUTHORIZED}).")
                 exc = MaltegoHTTPDataProviderAPIKeyInvalid(
                     f"Upstream API: {url_netloc} API key invalid ({httpx.codes.UNAUTHORIZED}).", response=res
                 )
                 context.upstream_exceptions.append(exc)
                 raise exc
             elif res.status_code == httpx.codes.FORBIDDEN:
-                log.error(f"Upstream API: {url_netloc} API unauthorized ({httpx.codes.FORBIDDEN}).")
+                log.warning(f"Upstream API: {url_netloc} API access forbidden ({httpx.codes.FORBIDDEN}).")
                 exc = MaltegoHTTPUnauthorized(
-                    f"Upstream API: {url_netloc} API unauthorized ({httpx.codes.FORBIDDEN}).", response=res
+                    f"Upstream API: {url_netloc} API access forbidden ({httpx.codes.FORBIDDEN}).", response=res
                 )
                 context.upstream_exceptions.append(exc)
                 raise exc
             elif res.status_code == httpx.codes.NOT_FOUND:
-                log.error(f"Upstream API: {url_netloc} API resource not found ({httpx.codes.NOT_FOUND}).")
+                log.warning(f"Upstream API: {url_netloc} API resource not found ({httpx.codes.NOT_FOUND}).")
                 exc = MaltegoHTTPDataProviderNotFound(
                     f"Upstream API: {url_netloc} API resource not found ({httpx.codes.NOT_FOUND}).", response=res
                 )
@@ -387,14 +387,22 @@ class IntegrationClient:
                 context.upstream_exceptions.append(exc)
                 raise exc
             elif res.status_code == httpx.codes.TOO_MANY_REQUESTS:
-                log.error(f"Upstream API: {url_netloc} rate limited (429).")
+                log.warning(f"Upstream API: {url_netloc} rate limited (429).")
                 exc = MaltegoHTTPDataProviderUnavailable(
                     f"Upstream API: {url_netloc} rate limited (429).", response=res
                 )
                 context.upstream_exceptions.append(exc)
                 raise exc
+            elif res.status_code == httpx.codes.PAYMENT_REQUIRED:
+                log.warning(f"Upstream API: {url_netloc} payment required / credits exhausted (402).")
+                exc = MaltegoHTTPDataProviderUnavailable(
+                    f"Upstream API: {url_netloc} payment required / credits exhausted (402).", response=res
+                )
+                context.upstream_exceptions.append(exc)
+                raise exc
             else:
-                log.error(f"Upstream API: {url_netloc} API returned an unexpected response ({res.status_code}).")
+                log_fn = log.warning if 400 <= res.status_code < 500 else log.error
+                log_fn(f"Upstream API: {url_netloc} API returned an unexpected response ({res.status_code}).")
                 exc = MaltegoHTTPDataProviderInvalidResponse(
                     f"Upstream API: {url_netloc} API returned an unexpected response ({res.status_code}).",
                     response=res,

@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 1.1.2 - 2026-09-29
+
 ### Fixed
 
 - `DATE_TIME` and `DATE` property values sent as Unix epoch timestamps
@@ -23,6 +25,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `datetime` link property values that are naive, non-UTC, or use
   `dateutil.tz.tzutc()` are now normalized to UTC (as entity properties already
   are) instead of failing with an `AssertionError`.
+- `IntegrationClient` now maps upstream HTTP 402 (payment required / credits
+  exhausted) to `MaltegoHTTPDataProviderUnavailable` instead of an "unexpected
+  response", and the 403 message no longer implies an invalid API key.
+- Upstream 4xx responses are logged at WARNING instead of ERROR, since
+  connectors often treat them as expected outcomes (e.g. 404 = no results);
+  5xx, unknown statuses and network errors keep their levels.
+- The runner logs transforms raising `MaltegoHTTPClientError` subclasses (e.g.
+  `MaltegoHTTPInputEntityMalformed`) at WARNING instead of ERROR; other
+  `MaltegoException`s remain ERROR.
+- `daterange.fromstring_v3` and `date`/`datetime`/`daterange` transform
+  settings now accept epoch-timestamp values, and out-of-range values are
+  treated as unparseable instead of raising `OverflowError` (HTTP 500).
+- `daterange` no longer raises `TypeError` when one bound is timezone-naive and
+  the other aware; bounds are normalized before being compared.
+- Empty items in `DATE_TIME`/`DATE`/`DATE_RANGE` list property values are
+  dropped instead of producing mixed lists such as `[datetime, '']`.
+- Unparseable input property values now log a WARNING with the property name,
+  type and exception type instead of an ERROR traceback containing the raw
+  value; the raw value is still passed through to the transform.
 
 ## 1.1.1 - 2026-09-25
 

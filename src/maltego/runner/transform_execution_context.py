@@ -17,6 +17,7 @@ from maltego.model.event import (
 )
 from maltego.model.exception import (
     MaltegoException,
+    MaltegoHTTPClientError,
     MaltegoHTTPInputEntityMalformed,
     MaltegoHTTPServerError,
     MaltegoTransformTimeoutError,
@@ -349,8 +350,9 @@ class TransformExecutionContext:
             self.result.context.log.partial(warning.message)
             self.result.code = warning.classic_status_code
         except MaltegoException as ex:
-            log.error(
-                f"Transform threw {type(ex).__name__}: {ex.message}")
+            # Client errors (bad input, not found, unauthorized) are expected user-facing outcomes.
+            log_fn = log.warning if isinstance(ex, MaltegoHTTPClientError) else log.error
+            log_fn(f"Transform threw {type(ex).__name__}: {ex.message}")
             self.result.push_exception(ex)
             if isinstance(ex, MaltegoHTTPServerError):
                 self.result.code = ex.status_code

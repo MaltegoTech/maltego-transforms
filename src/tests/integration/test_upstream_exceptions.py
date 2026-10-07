@@ -1,5 +1,6 @@
 # Copyright (c) Maltego Technologies GmbH.
 # pylint: disable=protected-access
+import logging
 import uuid
 from typing import Optional, Sequence
 from unittest.mock import MagicMock
@@ -11,7 +12,11 @@ from maltego.middlewares.middlewares import TransformMiddleware
 from maltego.model.exception import (
     MaltegoException,
     MaltegoHTTPDataProviderAPIKeyInvalid,
+    MaltegoHTTPDataProviderInvalidResponse,
+    MaltegoHTTPDataProviderNotFound,
     MaltegoHTTPDataProviderUnavailable,
+    MaltegoHTTPInputEntityMalformed,
+    MaltegoHTTPServerError,
     MaltegoHTTPUnauthorized,
 )
 from maltego.model.graph import MaltegoGraph
@@ -231,3 +236,106 @@ async def test_e2e_runner_middleware_sees_upstream_exceptions(monkeypatch):
         assert source == "upstream_handled"
 
     _client.rate_throttler._leak_task.cancel()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status_code", "expected_exception", "expected_level"),
+    [
+        (400, MaltegoHTTPDataProviderInvalidResponse, logging.WARNING),
+        (401, MaltegoHTTPDataProviderAPIKeyInvalid, logging.WARNING),
+        (402, MaltegoHTTPDataProviderUnavailable, logging.WARNING),
+        (403, MaltegoHTTPUnauthorized, logging.WARNING),
+        (404, MaltegoHTTPDataProviderNotFound, logging.WARNING),
+        (429, MaltegoHTTPDataProviderUnavailable, logging.WARNING),
+        (500, MaltegoHTTPDataProviderUnavailable, logging.ERROR),
+        (503, MaltegoHTTPDataProviderUnavailable, logging.ERROR),
+        (302, MaltegoHTTPDataProviderInvalidResponse, logging.ERROR),
+    ],
+)
+async def test_upstream_status_maps_to_exception_and_log_level(
+    monkeypatch, caplog, status_code, expected_exception, expected_level
+):
+    """Upstream 4xx are often expected by connectors (e.g. 404 = no results) and log at WARNING;
+    5xx and unknown statuses stay at ERROR."""
+    client = _make_client_with_mock_response(monkeypatch, status_code=status_code)
+    context = _make_context()
+
+    with caplog.at_level(logging.DEBUG, logger="maltego.util"), pytest.raises(expected_exception) as exc_info:
+        await client.get(url="https://api.example.com/data", context=context)
+
+    assert type(exc_info.value) is expected_exception
+    upstream_records = [r for r in caplog.records if r.getMessage().startswith("Upstream API:")]
+    assert [r.levelno for r in upstream_records] == [expected_level]
+
+    client.rate_throttler._leak_task.cancel()
+
+
+@pytest.mark.asyncio
+async def test_upstream_402_is_reported_as_payment_required(monkeypatch):
+    client = _make_client_with_mock_response(monkeypatch, status_code=402)
+
+    with pytest.raises(MaltegoHTTPDataProviderUnavailable) as exc_info:
+        await client.get(url="https://api.example.com/data", context=_make_context())
+
+    assert "402" in exc_info.value.message
+    assert "unexpected" not in exc_info.value.message
+
+    client.rate_throttler._leak_task.cancel()
+
+
+@pytest.mark.asyncio
+async def test_upstream_403_message_does_not_claim_invalid_key(monkeypatch):
+    client = _make_client_with_mock_response(monkeypatch, status_code=403)
+
+    with pytest.raises(MaltegoHTTPUnauthorized) as exc_info:
+        await client.get(url="https://api.example.com/data", context=_make_context())
+
+    assert "invalid" not in exc_info.value.message.lower()
+
+    client.rate_throttler._leak_task.cancel()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("raised", "expected_level"),
+    [
+        (MaltegoHTTPInputEntityMalformed("bad phone number"), logging.WARNING),
+        (MaltegoHTTPDataProviderNotFound("nothing found"), logging.WARNING),
+        (MaltegoHTTPServerError("provider broke"), logging.ERROR),
+        (MaltegoHTTPDataProviderUnavailable("provider down"), logging.ERROR),
+    ],
+)
+async def test_runner_logs_client_errors_at_warning(caplog, raised, expected_level):
+    async def failing_transform(input_entity: Phrase, context: MaltegoContext) -> Phrase:
+        raise raised
+
+    transform = MaltegoTransform(
+        impl=failing_transform,
+        name="test.failing",
+        display_name="Test Failing",
+        description="test",
+        author="test",
+        location_relevance="",
+        owner="test",
+        settings=[],
+        transform_set="test",
+        transform_ns="test",
+    )
+    exec_ctx = TransformExecutionContext(
+        run_id=str(uuid.uuid4()),
+        transform=transform,
+        transform_input=Phrase("input"),
+        transform_settings={},
+        context=_make_context(),
+        limit=12,
+        transform_execution_timeout=30,
+        middleware_execution_timeout=30,
+        middlewares=[],
+    )
+
+    with caplog.at_level(logging.DEBUG, logger="maltego.runner"):
+        await exec_ctx.run()
+
+    threw = [r for r in caplog.records if r.getMessage().startswith("Transform threw")]
+    assert [r.levelno for r in threw] == [expected_level]
