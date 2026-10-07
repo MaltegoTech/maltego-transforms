@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- v3 transforms requiring an input entity now reject empty input graphs with
+  HTTP 400. Previously, requests from older or unrecognized clients failed
+  with HTTP 500. Transforms accepting an empty list of entities are unaffected.
+
 - Cleanup of expired v3 runs no longer fails with `TypeError: 'list' object is
   not callable` on multi-input (multiplexed) runs. Such runs now receive their
   410 timeout error message; previously it was lost (the run was still marked
@@ -43,8 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   results poll was merged into the event that poll had already served, so
   `eventCount` did not grow and clients, which page forward and never re-read,
   never received it. Updates are now merged only into events gathered in the
-  same pass; an update after a poll is a new event. Updates between two polls
-  are still combined into one event.
+  same pass; updates gathered later remain separate even without another poll.
 - Merged UPDATE events now keep every display field and overlay. Previously a
   second display field or overlay added between two polls replaced the first,
   so clients received only the last one.
