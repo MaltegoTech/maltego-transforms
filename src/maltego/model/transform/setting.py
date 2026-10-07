@@ -18,13 +18,11 @@ import warnings
 _SETTING_NAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,127}$")
 
 from datetime import date, datetime
-from dateutil.parser import parse as dateutil_parse
-from dateutil.parser import ParserError
 
 from maltego.model.types import (
     MaltegoSettingDateTypes, MaltegoSettingPrimitiveTypesList,
     MaltegoSettingTypes, MaltegoSettingDateTypesList,
-    daterange, normalize_date, to_str_format
+    daterange, parse_datetime_str, normalize_date, to_str_format
 )
 from maltego.protocol.v3.discovery.transform import V3TransformSetting, serialize_daterange
 
@@ -163,7 +161,7 @@ class TransformSetting:
     ) -> Optional[MaltegoSettingDateTypes]:
         try:
             return daterange.fromstring_v3(value)
-        except (ParserError, TypeError, ValueError) as e:
+        except (TypeError, ValueError, OverflowError, OSError) as e:
             log.warning(f"Could not parse daterange value '{value}': {e}")
             return None
 
@@ -172,8 +170,8 @@ class TransformSetting:
             value: str,
     ) -> Optional[MaltegoSettingDateTypes]:
         try:
-            return normalize_date(dateutil_parse(value))
-        except ParserError:
+            return normalize_date(parse_datetime_str(value))
+        except (ValueError, OverflowError, OSError):
             return None
 
     def _coerce_date_setting_type_from_str_value(
@@ -181,8 +179,8 @@ class TransformSetting:
             value: str,
     ) -> Optional[MaltegoSettingDateTypes]:
         try:
-            return normalize_date(dateutil_parse(value).date())
-        except ParserError:
+            return normalize_date(parse_datetime_str(value).date())
+        except (ValueError, OverflowError, OSError):
             return None
 
     def _coerce_all_date_setting_type_from_str_value(

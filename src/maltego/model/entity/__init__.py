@@ -8,8 +8,6 @@ import datetime
 import logging
 import sys
 import typing
-import re
-import dateutil.parser
 import markdown
 import nh3
 
@@ -83,6 +81,7 @@ from maltego.model.types import (
     Url,
     Color,
     daterange,
+    parse_datetime_str,
     LinkColor,
     LinkStyle,
     LinkThickness,
@@ -198,41 +197,24 @@ def _assert_date_str_len(value: str, property_type: str) -> None:
         )
 
 
-# Maltego clients may send DATE_TIME/DATE values as Unix epoch timestamps
-# (milliseconds, e.g. "1696175006000") instead of ISO-8601 strings. dateutil
-# rejects those (OverflowError / "year ... is out of range"). Compact ISO forms
-# such as "20230717" are also all digits and dateutil parses them correctly, so
-# epoch handling is only a fallback for digit strings dateutil cannot parse.
-_EPOCH_MILLIS_THRESHOLD = 100_000_000_000  # |value| >= 1e11 → milliseconds (1e11 s is year ~5138)
-_EPOCH_RE = re.compile(r"[+-]?\d+(\.\d+)?")
-
-
-def _parse_datetime_str(value: str) -> datetime.datetime:
-    """Parse a date string with dateutil, falling back to epoch seconds/milliseconds."""
-    try:
-        return dateutil.parser.parse(value)
-    except (OverflowError, ValueError):
-        stripped = value.strip()
-        if not _EPOCH_RE.fullmatch(stripped):
-            raise
-    timestamp = float(stripped)
-    if abs(timestamp) >= _EPOCH_MILLIS_THRESHOLD:
-        timestamp /= 1000
-    return datetime.datetime.fromtimestamp(timestamp, tz=datetime.timezone.utc)
+_PARSED_DATE_TYPES = ("DATE_TIME", "DATE", "DATE_RANGE")
 
 
 def parse_str_type_to_value(property_value: Any, property_type: str) -> Any:
     if isinstance(property_value, list):
+        if property_type in _PARSED_DATE_TYPES:
+            # empty items carry no date; keep typed lists homogeneous instead of mixing in ''
+            property_value = [value for value in property_value if value]
         return [parse_str_type_to_value(value, property_type) for value in property_value]
     if property_type == 'DATE_TIME' and property_value:
         _assert_date_str_len(property_value, property_type)
-        return _parse_datetime_str(property_value)
+        return parse_datetime_str(property_value)
     if property_type == 'DATE_RANGE' and property_value:
         _assert_date_str_len(property_value, property_type)
         return daterange.fromstring_v3(property_value)
     if property_type == 'DATE' and property_value:
         _assert_date_str_len(property_value, property_type)
-        return _parse_datetime_str(property_value).date()
+        return parse_datetime_str(property_value).date()
     return property_value
 
 
@@ -1507,8 +1489,11 @@ class MaltegoEntity(Observable, metaclass=MaltegoEntityMeta):
             else:
                 try:
                     resolved_value = parse_str_type_to_value(value, entity_property.type)
-                except Exception:
-                    log.exception(f"Could not handle property {name} with value {value!r}")
+                except Exception as exc:  # noqa: BLE001 - any parse failure falls back to the raw value
+                    # never log the raw value (PII); pass it through for transforms that cope with strings
+                    log.warning(
+                        f"Could not parse property {name!r} as {entity_property.type!r}: {type(exc).__name__}"
+                    )
                     resolved_value = value
 
             properties[name] = _MaltegoEntityProperty(
@@ -1672,13 +1657,13 @@ def coerce_property_type_from_value(value: Any, type_: Type[Any]) -> Any:
         if not isinstance(value, str):
             raise TypeError(f"Cannot parse {type(value)} with dateutil")
         _assert_date_str_len(value, "DATE_TIME")
-        return _parse_datetime_str(value)
+        return parse_datetime_str(value)
 
     if issubclass(type_, datetime.date):
         if not isinstance(value, str):
             raise TypeError(f"Cannot parse {type(value)} with dateutil")
         _assert_date_str_len(value, "DATE")
-        return _parse_datetime_str(value).date()
+        return parse_datetime_str(value).date()
 
     if issubclass(type_, daterange):
         if isinstance(value, str):
