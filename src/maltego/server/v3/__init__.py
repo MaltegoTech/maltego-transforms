@@ -1303,7 +1303,9 @@ class V3Server:
                 detail=e.message or "Bad request",
             )
         except ValueError as e:
-            log.debug("Validation error scheduling transform: %s", e)
+            # The client only sees "Invalid input."; keep the reason in the
+            # server log so rejected runs are diagnosable.
+            log.warning("Rejected transform input while scheduling: %s: %s", type(e).__name__, e)
             raise fastapi.HTTPException(
                 status_code=fastapi.status.HTTP_400_BAD_REQUEST,
                 detail="Invalid input.",
