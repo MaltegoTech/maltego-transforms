@@ -30,6 +30,7 @@ def serialize_daterange(daterange_: daterange) -> str:
 class TransformDiscoveryIO(APIModel):
     type: Literal['GRAPH', 'ENTITIES', 'ENTITY']
     type_ids: List[str]
+    type_versions: Optional[dict[str, Optional[str]]] = None
     property_input_type: Optional[Literal['ANY', 'ALL']] = None
     properties: Optional[List[str]] = None
     input_constraint: Optional[Dict] = None

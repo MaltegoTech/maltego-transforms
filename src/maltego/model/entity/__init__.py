@@ -270,7 +270,7 @@ def enforce_annotated_type(
                 f"Cannot set property with type '{actual_type}' to a '{defined_property_type}'-annotated property."
             )
     origin = typing.get_origin(defined_property_type)
-    if origin is not None:
+    if origin is not None and origin is not typing.Annotated:
         assert origin == list, "The only allowed generic property type is 'List[..]'"
         inner_type = typing.get_args(defined_property_type)[0]
         if isinstance(value, str):
@@ -334,6 +334,7 @@ class MaltegoEntityMeta(type):
     _registry: Dict[Optional[str], Type[MaltegoEntity]] = {}
     value_property_attribute_name: Optional[str] = None
     TYPE_NAME: Optional[str] = None
+    TYPE_VERSION: Optional[str] = None
     entity_properties: Dict[str, _MaltegoEntityProperty[Any]]
 
     @staticmethod
@@ -403,6 +404,9 @@ class MaltegoEntityMeta(type):
                     f"Use a single type (e.g. List[Person], List[str], str, ...) for a property."
                 )
 
+            if typing.get_origin(annotation) is typing.Annotated:
+                annotation = typing.get_args(annotation)[0]
+
             if property_name in entity_properties:
                 entity_properties[property_name].annotated_type = annotation
             else:
@@ -468,6 +472,10 @@ class MaltegoEntityMeta(type):
         bases: Tuple[type, ...],
         dct: Dict[str, Any]
     ) -> "MaltegoEntityMeta":
+        # Do not inherit TYPE_VERSION from base classes. Each Entity is independently versioned.
+        if name != "MaltegoEntity" and "TYPE_VERSION" not in dct:
+            dct["TYPE_VERSION"] = None
+
         dct["entity_properties"] = MaltegoEntityMeta.__compile_entity_properties__(
             name,
             bases,
@@ -527,6 +535,7 @@ class MaltegoEntityMeta(type):
                 f"Entity {name} with type id {type_name} already exists in registry: "
                 f"{MaltegoEntityMeta._registry[type_name]}"
             )
+
         if type_name and type_name != ALL_ENTITY_TYPES:
             MaltegoEntityMeta.try_add_registry(type_name, maltego_entity_class)
         return maltego_entity_class
@@ -651,6 +660,8 @@ class MaltegoEntity(Observable, metaclass=MaltegoEntityMeta):
     """
     Config: MaltegoEntityConfig = MaltegoEntityConfig()
     TYPE_NAME: str = ALL_ENTITY_TYPES
+    TYPE_VERSION: typing.ClassVar[str | None] = None
+    INSTANCE_VERSION: str | None = None
     enum_keys: List[str] = [
         "bookmark",
         "link_style",
@@ -1405,6 +1416,7 @@ class MaltegoEntity(Observable, metaclass=MaltegoEntityMeta):
         allowed_root = False if requires_downgrade else config.allowed_root
         return V3EntityDefinition(
             id=entity.TYPE_NAME,
+            version=entity.TYPE_VERSION,
             display_name=config.display_name,
             display_name_plural=config.display_name_plural,
             description=config.description,
@@ -1552,6 +1564,7 @@ class MaltegoEntity(Observable, metaclass=MaltegoEntityMeta):
         )
         assert isinstance(model, MaltegoEntity)
 
+        model.INSTANCE_VERSION = run_model.version
         model.genealogy = run_model.base_entities or []
 
         return model
@@ -1567,6 +1580,7 @@ class MaltegoEntity(Observable, metaclass=MaltegoEntityMeta):
         return TransformRunEntity(
             id=self.maltego_entity_id,
             type=self.TYPE_NAME,
+            version=self.INSTANCE_VERSION or self.TYPE_VERSION,
             value_ref=self.Config.value_property,
             weight=self.weight,
             properties=[

@@ -252,6 +252,8 @@ def merge_maltego_entity_config(
 RESERVED_ENTITY_ATTRIBUTES = [
     "Config",
     "TYPE_NAME",
+    "TYPE_VERSION",
+    "INSTANCE_VERSION",
     "entity_properties",
     "__module__",
     "__qualname__",

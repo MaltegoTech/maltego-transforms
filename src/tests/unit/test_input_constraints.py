@@ -82,6 +82,9 @@ async def test_property_constraints(
     assert prop_constraint_transforms[0].get("input") == {
         "type": "ENTITY",
         "typeIds": ["maltego.Unknown"],
+        "typeVersions": {
+            "maltego.Unknown": None
+        },
         "inputConstraint": {
             "constraints": [
                 {"type": "entity_type_constraint", "entity_type": "maltego.Alias"},
@@ -112,6 +115,7 @@ async def test_property_constraints(
     assert prop_constraint_transforms[1].get("input") == {
         "type": "GRAPH",
         "typeIds": ["maltego.Unknown"],
+        "typeVersions": {},
         "inputConstraint": {
             "constraints": [
                 {
@@ -176,6 +180,9 @@ async def test_property_constraints(
     assert prop_constraint_transforms[2].get("input") == {
         "type": "ENTITY",
         "typeIds": ["maltego.Unknown"],
+        "typeVersions": {
+            "maltego.Unknown": None
+        },
         "inputConstraint": {
             "constraints": [
                 {
@@ -199,6 +206,9 @@ async def test_property_constraints(
     assert prop_constraint_transforms[3].get("input") == {
         "type": "ENTITY",
         "typeIds": ["maltego.Domain"],
+        "typeVersions": {
+            "maltego.Domain": None
+        },
         "inputConstraint": {
             "constraints": [
                 {

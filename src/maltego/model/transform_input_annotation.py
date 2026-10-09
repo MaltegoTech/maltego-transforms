@@ -166,9 +166,24 @@ class TransformInputAnnotation:
         return entity_filter
 
     def get_flat_entity_types(self) -> List[str]:
-        entity_filter = self.__get_flat_types()
+        try:
+            entity_filter = self.__get_flat_types()
+        except ValueError:
+            # e.g. a transform with no return annotation: output annotation is None,
+            # which __get_flat_types() cannot classify. Stay backwards compatible.
+            return []
 
         return [e.TYPE_NAME for e in entity_filter if e.TYPE_NAME is not None]
+
+    def get_entities_type_versions(self) -> dict[str, typing.Optional[str]]:
+        try:
+            entity_filter = self.__get_flat_types()
+        except ValueError:
+            # e.g. a transform with no return annotation: output annotation is None,
+            # which __get_flat_types() cannot classify. Stay backwards compatible.
+            return {}
+
+        return {e.TYPE_NAME: e.TYPE_VERSION for e in entity_filter}
 
     def get_entities_type_ids(self) -> List[str]:
         if self.annotation is None or (
