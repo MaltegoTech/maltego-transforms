@@ -35,6 +35,7 @@ class EntityOverlay(APIModel):
 class TransformRunEntity(APIModel):
 
     id: str
+    version: Optional[str] = None
     value_ref: Optional[str] = None
     weight: Optional[int] = None
     properties: Optional[List[Property]] = None

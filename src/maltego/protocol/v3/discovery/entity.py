@@ -41,6 +41,7 @@ class V3EntityProperties(APIModel):
 
 class V3EntityDefinition(APIModel):
     id: str
+    version: str | None = None
     display_name: str
     display_name_plural: str
     icon_resource: str

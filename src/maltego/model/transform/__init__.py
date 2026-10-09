@@ -905,6 +905,7 @@ class MaltegoTransform:
                 type='GRAPH',
                 type_ids=graph_input_type_ids if graph_input_type_ids else [
                     'maltego.Unknown'],
+                type_versions=input_annotation.get_entities_type_versions(),
                 property_input_type=self.properties_type,
                 properties=self.properties,
                 input_constraint=self.input_constraint.to_v3_model(
@@ -914,6 +915,7 @@ class MaltegoTransform:
             return TransformDiscoveryIO(
                 type='ENTITY',
                 type_ids=input_annotation.get_entities_type_ids(),
+                type_versions=input_annotation.get_entities_type_versions(),
                 property_input_type=self.properties_type,
                 properties=self.properties,
                 input_constraint=self.input_constraint.to_v3_model(
@@ -923,6 +925,7 @@ class MaltegoTransform:
             return TransformDiscoveryIO(
                 type='ENTITIES',
                 type_ids=input_annotation.get_entities_type_ids(),
+                type_versions=input_annotation.get_entities_type_versions(),
                 property_input_type=self.properties_type,
                 properties=self.properties,
                 input_constraint=self.input_constraint.to_v3_model(
@@ -937,10 +940,12 @@ class MaltegoTransform:
                 type='GRAPH',
                 type_ids=graph_output_type_ids if graph_output_type_ids else [
                     'maltego.Unknown'],
+                type_versions=self.annotation.output.get_entities_type_versions(),
             )
         return TransformDiscoveryIO(
             type='ENTITIES',
             type_ids=self.annotation.output.get_entities_type_ids(),
+            type_versions=self.annotation.output.get_entities_type_versions(),
         )
 
 

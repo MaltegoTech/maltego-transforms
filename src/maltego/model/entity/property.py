@@ -1,5 +1,6 @@
 # Copyright (c) Maltego Technologies GmbH.
 import datetime
+import typing
 from dataclasses import dataclass
 from typing import Any, Dict, Generic, List, Optional, Type, get_args, get_origin
 
@@ -77,20 +78,20 @@ def _validate_mel_expression(
 class _MaltegoEntityProperty(Generic[EntityPropertyType]):
 
     def __init__(
-            self,
-            display_name: Optional[str] = None,
-            name: Optional[str] = None,
-            matching_rule: MatchingRule = MATCHING_RULE_STRICT,
-            # this doubles as the default value when we're defining a full entity
-            value: Optional[EntityPropertyType] = None,
-            description: str = "",
-            hidden: bool = False,
-            readonly: bool = False,
-            nullable: bool = True,
-            sample_value: Optional[EntityPropertyType] = None,
-            evaluator: Optional[str] = None,
-            annotated_type: Optional[EntityPropertyTypeMeta] = str,
-            link_properties: Optional[LinkProperties] = None,
+        self,
+        display_name: Optional[str] = None,
+        name: Optional[str] = None,
+        matching_rule: MatchingRule = MATCHING_RULE_STRICT,
+        # this doubles as the default value when we're defining a full entity
+        value: Optional[EntityPropertyType] = None,
+        description: str = "",
+        hidden: bool = False,
+        readonly: bool = False,
+        nullable: bool = True,
+        sample_value: Optional[EntityPropertyType] = None,
+        evaluator: Optional[str] = None,
+        annotated_type: Optional[EntityPropertyTypeMeta] = str,
+        link_properties: Optional[LinkProperties] = None,
     ) -> None:
         self.name = name  # might be changed/inferred in MaltegoEntityMeta class
         self.display_name = display_name  # might be inferred in MaltegoEntityMeta class
@@ -124,11 +125,13 @@ class _MaltegoEntityProperty(Generic[EntityPropertyType]):
 
     @property
     def primitive_type(self) -> Any:
-        if get_origin(self.annotated_type) is None:
-            return self.annotated_type
-        if get_origin(self.annotated_type) == list:
-            return get_args(self.annotated_type)[0]
-        raise ValueError(f"{type(self.annotated_type)} has unparsable origin {get_origin(self.annotated_type)}")
+        annotation = self.annotated_type
+
+        # handles arbitrary deeply nested generic types, e.g. Annotated[List[Annotated[str]]]
+        while len(typing.get_args(annotation)) != 0:
+            annotation = typing.get_args(annotation)[0]
+
+        return annotation
 
     def is_entity_type(self) -> bool:
         return to_v3_property_type(self.primitive_type) == "ENTITY"
@@ -225,14 +228,14 @@ class _MaltegoEntityProperty(Generic[EntityPropertyType]):
         if self.link_properties is None:
             return None
         return MaltegoLink(source_id=None,
-                           target_id=None,
-                           is_reversed=self.link_properties.is_reversed,
-                           style=self.link_properties.style,
-                           color=self.link_properties.color,
-                           thickness=self.link_properties.thickness,
-                           label=self.link_properties.label,
-                           properties=self.link_properties.properties,
-                           ).to_v3_link_properties()
+            target_id=None,
+            is_reversed=self.link_properties.is_reversed,
+            style=self.link_properties.style,
+            color=self.link_properties.color,
+            thickness=self.link_properties.thickness,
+            label=self.link_properties.label,
+            properties=self.link_properties.properties,
+            ).to_v3_link_properties()
 
     def to_v3_property(self, composed_graph: Optional[bool] = False) -> Property:
         # TODO: consider adding support for when a property is to be deleted / set to None after initial ADD event
@@ -252,8 +255,8 @@ class _MaltegoEntityProperty(Generic[EntityPropertyType]):
         elif isinstance(self.value, MaltegoEntity):
             value = self.value.maltego_entity_id
         elif (
-                self.value
-                and isinstance(self.value, list)
+            self.value
+            and isinstance(self.value, list)
         ):
             value = [v.maltego_entity_id if isinstance(v, MaltegoEntity) else v for v in self.value]
         else:
@@ -285,19 +288,19 @@ def mef_from_value(property_name: str, value: Any) -> _MaltegoEntityProperty[Any
 # so that a type checker can be told (via overloads) that this is a
 # function whose type depends on its parameters.
 def MEF(  # pylint: disable=invalid-name
-        *,
-        display_name: Optional[str] = None,
-        name: Optional[str] = None,
-        matching_rule: MatchingRule = MATCHING_RULE_STRICT,
-        # this doubles as the default value when we're defining a full entity
-        value: Optional[EntityPropertyType] = None,
-        description: str = "",
-        hidden: bool = False,
-        readonly: bool = False,
-        nullable: bool = True,
-        sample_value: Optional[EntityPropertyType] = None,
-        evaluator: Optional[str] = None,
-        link_properties: Optional[LinkProperties] = None,
+    *,
+    display_name: Optional[str] = None,
+    name: Optional[str] = None,
+    matching_rule: MatchingRule = MATCHING_RULE_STRICT,
+    # this doubles as the default value when we're defining a full entity
+    value: Optional[EntityPropertyType] = None,
+    description: str = "",
+    hidden: bool = False,
+    readonly: bool = False,
+    nullable: bool = True,
+    sample_value: Optional[EntityPropertyType] = None,
+    evaluator: Optional[str] = None,
+    link_properties: Optional[LinkProperties] = None,
 ) -> Any:
     if contains_entity(value):
         raise TypeError(
@@ -320,18 +323,18 @@ def MEF(  # pylint: disable=invalid-name
 
 
 def MaltegoEntityProperty(  # pylint: disable=invalid-name
-        *,
-        display_name: Optional[str] = None,
-        name: Optional[str] = None,
-        matching_rule: MatchingRule = MATCHING_RULE_STRICT,
-        # this doubles as the default value when we're defining a full entity
-        value: Optional[EntityPropertyType] = None,
-        description: str = "",
-        hidden: bool = False,
-        readonly: bool = False,
-        nullable: bool = True,
-        sample_value: Optional[EntityPropertyType] = None,
-        evaluator: Optional[str] = None
+    *,
+    display_name: Optional[str] = None,
+    name: Optional[str] = None,
+    matching_rule: MatchingRule = MATCHING_RULE_STRICT,
+    # this doubles as the default value when we're defining a full entity
+    value: Optional[EntityPropertyType] = None,
+    description: str = "",
+    hidden: bool = False,
+    readonly: bool = False,
+    nullable: bool = True,
+    sample_value: Optional[EntityPropertyType] = None,
+    evaluator: Optional[str] = None
 ) -> Any:
     """A Maltego Entity property definition
 

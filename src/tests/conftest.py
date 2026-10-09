@@ -2066,6 +2066,7 @@ def reload_example() -> None:
     reload("tests.example.transforms.prompts")
     reload("tests.example.transforms.property_constraints")
     reload("tests.example.transforms.entity_typed_properties")
+    reload("tests.example.transforms.versioned_entity_transforms")
 
 
 @pytest.fixture(scope="session")

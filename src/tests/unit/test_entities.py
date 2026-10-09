@@ -2,16 +2,18 @@
 import datetime
 import pathlib
 import sys
-from typing import List, Optional, Any
+from typing import Annotated, List, Optional, Any
 
 import pytest
 
-from maltego.server import MaltegoEntity, MaltegoEntityProperty, daterange, register_entity
-from maltego.model.entity import MEF, MaltegoEntityConfig, MaltegoEntityMeta, _namespace_annotations
+from maltego.model.entity import MEF, MaltegoEntityConfig, MaltegoEntityMeta, _namespace_annotations, \
+    mef_from_simple_annotation
 from maltego.model.entity.constants import Overlay, OverlayTypes, OverlayPositions
 from maltego.model.entity.property import _MaltegoEntityProperty
 from maltego.model.entity.type_handling import to_v3_property_type
-
+from maltego.protocol.v3.execution.entity import TransformRunEntity
+from maltego.protocol.v3.execution.property import Property
+from maltego.server import MaltegoEntity, MaltegoEntityProperty, daterange, register_entity
 from tests.conftest import RichEntity, Phrase, Person
 
 pytestmark = pytest.mark.unit
@@ -90,7 +92,6 @@ def assert_entity_config(entity) -> None:
 
 
 def test_empty_entity_def() -> None:
-
     @register_entity
     class SimpleMock(MaltegoEntity):
         pass
@@ -434,7 +435,6 @@ def test_entity_config_icons():
 
 
 def test_entity_config_base_entities() -> None:
-
     @register_entity
     class AEntity(MaltegoEntity):
         Config = MaltegoEntityConfig(
@@ -555,6 +555,7 @@ def test_entity_value_prop_missing():
                 description="A new fancy phrase entity",
                 icon_resource=("Assemble", str(TEST_RESOURCES / "BtcBlock.png"))
             )
+
         AEntity("ASD")
 
 
@@ -632,6 +633,47 @@ def test_config_inheritance() -> None:
 def test_entity_definition() -> None:
     entity = RichEntity("Foo")
     assert_entity_config(entity)
+
+
+def test_to_v3_entity_definition_includes_type_version() -> None:
+    # Regression guard: a MaltegoEntity subclass's TYPE_VERSION must be surfaced on
+    # the entity discovery payload (V3EntityDefinition.version), not just on
+    # transform-run entities (see MaltegoEntity.to_v3_run_entity's INSTANCE_VERSION
+    # handling).
+    class VersionedDiscoveryEntity(MaltegoEntity):
+        TYPE_NAME = "maltego.VersionedDiscoveryEntity"
+        TYPE_VERSION = "1.2.3"
+        Config = MaltegoEntityConfig(
+            value_property="text",
+            display_name="VersionedDiscovery",
+            display_property="text",
+            display_name_plural="VersionedDiscoveries",
+            icon_resource="None",
+            category="A",
+        )
+        text: str = MEF(name="text", display_name="Text", sample_value="x")
+
+    definition = MaltegoEntity.to_v3_entity_definition(VersionedDiscoveryEntity)
+
+    assert definition.version == "1.2.3"
+
+
+def test_to_v3_entity_definition_version_defaults_to_none_when_unset() -> None:
+    class UnversionedDiscoveryEntity(MaltegoEntity):
+        TYPE_NAME = "maltego.UnversionedDiscoveryEntity"
+        Config = MaltegoEntityConfig(
+            value_property="text",
+            display_name="UnversionedDiscovery",
+            display_property="text",
+            display_name_plural="UnversionedDiscoveries",
+            icon_resource="None",
+            category="A",
+        )
+        text: str = MEF(name="text", display_name="Text", sample_value="x")
+
+    definition = MaltegoEntity.to_v3_entity_definition(UnversionedDiscoveryEntity)
+
+    assert definition.version is None
 
 
 def test_maltego_entity_instantiation() -> None:
@@ -777,10 +819,12 @@ def test_entity_with_classmethod():
         )
 
         prop_1: str = "foo"
-        prop_2: str = MaltegoEntityProperty(name="foo",
-                                            display_name="Foo",
-                                            sample_value="bar",
-                                            matching_rule="strict")
+        prop_2: str = MaltegoEntityProperty(
+            name="foo",
+            display_name="Foo",
+            sample_value="bar",
+            matching_rule="strict"
+            )
 
         @classmethod
         def bar(cls, alpha_2: str) -> None:  # pylint: disable=disallowed-name
@@ -803,15 +847,18 @@ def test_entity_with_classmethod():
 def test_entity_type_name_extrapolation():
     class Entity(MaltegoEntity):
         pass  # TYPE_NAME: maltego.Unknown
+
     assert Entity.TYPE_NAME == "maltego.Unknown"
 
     class Entity_(Entity):  # pylint: disable=invalid-name
         pass  # TYPE_NAME: maltego.Unknown
+
     assert Entity_.TYPE_NAME == "maltego.Unknown"
 
     @register_entity
     class RegisteredEntity(MaltegoEntity):
         pass  # TYPE_NAME: maltego.RegisteredEntity
+
     assert RegisteredEntity.TYPE_NAME == "maltego.RegisteredEntity"
 
     @register_entity
@@ -823,20 +870,24 @@ def test_entity_type_name_extrapolation():
     @register_entity
     class RegisteredEntity2(RegisteredEntity):
         pass  # TYPE_NAME: maltego.RegisteredEntity3
+
     assert RegisteredEntity2.TYPE_NAME == "maltego.RegisteredEntity2"
 
     @register_entity
     class RegisteredEntity3(Entity):
         pass  # TYPE_NAME: maltego.RegisteredEntity3
+
     assert RegisteredEntity3.TYPE_NAME == "maltego.RegisteredEntity3"
 
     @register_entity
     class RegisteredEntity4(RegisteredEntity3):
         pass  # TYPE_NAME: maltego.RegisteredEntity3
+
     assert RegisteredEntity4.TYPE_NAME == "maltego.RegisteredEntity4"
 
     class Entity2_(RegisteredEntity3):  # pylint: disable=invalid-name
         pass  # TYPE_NAME: maltego.RegisteredEntity3
+
     assert Entity2_.TYPE_NAME == "maltego.RegisteredEntity3"
 
     assert Phrase.TYPE_NAME == "maltego.Phrase"
@@ -851,7 +902,7 @@ def test_unknown_entity_default_property_type_str():
 
 def test_overlay_during_property_initialization():
     """Test that add_overlay can be called during set_property in __init__."""
-    
+
     @register_entity
     class EntityWithOverlayOnPropertySet(MaltegoEntity):
         """Entity that adds an overlay when a specific property is set."""
@@ -865,18 +916,18 @@ def test_overlay_during_property_initialization():
         )
         value: str = MEF(name="value")
         trigger_property: str = MEF(name="trigger_property")
-        
+
         def set_property(
-                self,
-                name: str,
-                value: Optional[Any],
-                display_name: Optional[str] = None,
-                matching_rule: Optional[Any] = None,
-                try_parsing: bool = True,
-                property_type: Optional[Any] = None,
+            self,
+            name: str,
+            value: Optional[Any],
+            display_name: Optional[str] = None,
+            matching_rule: Optional[Any] = None,
+            try_parsing: bool = True,
+            property_type: Optional[Any] = None,
         ) -> None:
             super().set_property(name, value, display_name, matching_rule, try_parsing, property_type)
-            
+
             # setting trigger_property also adds an overlay to the entity
             if name == "trigger_property" and value:
                 self.add_overlay(
@@ -884,7 +935,7 @@ def test_overlay_during_property_initialization():
                     OverlayPositions.NORTH,
                     "trigger_property"
                 )
-    
+
     # init time test
     entity = EntityWithOverlayOnPropertySet(
         value="test_value",
@@ -892,19 +943,19 @@ def test_overlay_during_property_initialization():
             "trigger_property": _MaltegoEntityProperty(value="test_trigger", display_name="Trigger")
         }
     )
-    
+
     assert entity.value == "test_value"
     assert entity.trigger_property == "test_trigger"
-    
+
     assert len(entity.overlays) == 1
     assert entity.overlays[0].overlay_type == "text"
     assert entity.overlays[0].position == "N"
     assert entity.overlays[0].property_name == "trigger_property"
-    
+
     # adding after initialization test
     entity2 = EntityWithOverlayOnPropertySet(value="test_value2")
     assert len(entity2.overlays) == 0
-    
+
     entity2.set_property("trigger_property", "triggered")
 
     assert len(entity2.overlays) == 1
@@ -949,11 +1000,76 @@ def test_typed_property_annotations_resolve_to_wire_types() -> None:
     assert props["count"].is_array is False
 
 
+def test_annotated_property_types_are_supported() -> None:
+    # Regression guard for feat(entity): support typing.Annotated for MaltegoEntity
+    # properties. Annotated[...] on a class-body annotation must be unwrapped to its
+    # inner type for discovery, assignment and serialization, exactly like the
+    # un-annotated type it wraps.
+    @register_entity
+    class AnnotatedEntity(MaltegoEntity):
+        Config = MaltegoEntityConfig(
+            value_property="text",
+            display_name="Annotated",
+            display_property="text",
+            display_name_plural="Annotateds",
+            icon_resource="None",
+            category="A",
+        )
+        text: Annotated[str, "metadata"] = MEF(name="text", display_name="Text")
+        tags: Annotated[List[str], "metadata"] = MEF(name="tags", display_name="Tags")
+        nested: List[Annotated[str, "metadata"]]= MEF(name="nested", display_name="Nested")
+        deep_nested: Annotated[Annotated[List[str], "metadata"], "metadata"] = MEF(name="deep_nested", display_name="Deep Nested")
+
+    props = AnnotatedEntity.entity_properties
+
+    # discovery: the Annotated wrapper must not leak into the resolved wire type
+    assert props["text"].primitive_type is str
+    assert to_v3_property_type(props["text"].primitive_type) == "STRING"
+    assert props["text"].is_array is False
+
+    assert props["tags"].primitive_type is str
+    assert to_v3_property_type(props["tags"].primitive_type) == "STRING"
+    assert props["tags"].is_array is True
+
+    field_model = props["tags"].to_field_model()
+    assert field_model.type == "STRING"
+    assert field_model.is_array is True
+
+    assert props["nested"].primitive_type is str
+    assert props["nested"].is_array is True
+
+    assert props["deep_nested"].primitive_type is str
+    assert props["deep_nested"].is_array is True
+
+    # assignment
+    entity = AnnotatedEntity("hello")
+    entity.tags = ["a", "b"]
+    assert entity.tags == ["a", "b"]
+
+    # serialization
+    run_entity = entity.to_v3_run_entity()
+    tags_property = next(p for p in run_entity.properties if p.name == "tags")
+    assert tags_property.value == ["a", "b"]
+    assert tags_property.type == "STRING"
+
+
+def test_primitive_type_unwraps_annotated_wrapping_list() -> None:
+    # Regression guard for fix(entity): handle nested typing.Annotated in
+    # primitive_type parsing. A property whose annotated_type is still a raw
+    # Annotated[List[X], ...] (e.g. built via mef_from_simple_annotation directly,
+    # bypassing the metaclass's own top-level unwrap) must resolve primitive_type to
+    # X, not to List[X].
+    prop = mef_from_simple_annotation("tags", Annotated[List[str], "metadata"])
+    assert prop.annotated_type == Annotated[List[str], "metadata"]
+    assert prop.primitive_type is str
+
+
 def test_namespace_annotations_reads_materialized_and_lazy() -> None:
     # Materialized namespace (Python < 3.14, and any explicitly-injected dict).
     assert _namespace_annotations({"__annotations__": {"x": int}}) == {"x": int}
     # No annotations at all -> empty mapping, never an import error.
     assert _namespace_annotations({}) == {}
+
     # A stray __annotate_func__ on an interpreter < 3.14 must degrade to {} rather
     # than importing annotationlib (which does not exist there). On 3.14+ the same
     # callable is evaluated in VALUE format and yields the real type.
@@ -967,21 +1083,23 @@ def test_namespace_annotations_reads_materialized_and_lazy() -> None:
         assert result == {}
 
 
-@pytest.mark.parametrize("value, expected", [
-    # epoch milliseconds, as sent by Maltego clients (prod regression: OverflowError in dateutil)
-    ("1696175006000", datetime.datetime(2023, 10, 1, 15, 43, 26, tzinfo=datetime.timezone.utc)),
-    ("1574040671000", datetime.datetime(2019, 11, 18, 1, 31, 11, tzinfo=datetime.timezone.utc)),
-    ("1696175006123", datetime.datetime(2023, 10, 1, 15, 43, 26, 123000, tzinfo=datetime.timezone.utc)),
-    # epoch seconds
-    ("1696175006", datetime.datetime(2023, 10, 1, 15, 43, 26, tzinfo=datetime.timezone.utc)),
-    ("-86400", datetime.datetime(1969, 12, 31, tzinfo=datetime.timezone.utc)),
-    # ISO strings unchanged, including all-digit compact forms dateutil already parses
-    ("2023-07-17T21:52:59.050Z", datetime.datetime(2023, 7, 17, 21, 52, 59, 50000, tzinfo=datetime.timezone.utc)),
-    # dateutil returns naive datetimes for offset-less input; that behaviour is unchanged
-    ("20230717", datetime.datetime(2023, 7, 17)),  # noqa: DTZ001
-    ("202307171543", datetime.datetime(2023, 7, 17, 15, 43)),  # noqa: DTZ001
-    ("20230717154326", datetime.datetime(2023, 7, 17, 15, 43, 26)),  # noqa: DTZ001
-])
+@pytest.mark.parametrize(
+    "value, expected", [
+        # epoch milliseconds, as sent by Maltego clients (prod regression: OverflowError in dateutil)
+        ("1696175006000", datetime.datetime(2023, 10, 1, 15, 43, 26, tzinfo=datetime.timezone.utc)),
+        ("1574040671000", datetime.datetime(2019, 11, 18, 1, 31, 11, tzinfo=datetime.timezone.utc)),
+        ("1696175006123", datetime.datetime(2023, 10, 1, 15, 43, 26, 123000, tzinfo=datetime.timezone.utc)),
+        # epoch seconds
+        ("1696175006", datetime.datetime(2023, 10, 1, 15, 43, 26, tzinfo=datetime.timezone.utc)),
+        ("-86400", datetime.datetime(1969, 12, 31, tzinfo=datetime.timezone.utc)),
+        # ISO strings unchanged, including all-digit compact forms dateutil already parses
+        ("2023-07-17T21:52:59.050Z", datetime.datetime(2023, 7, 17, 21, 52, 59, 50000, tzinfo=datetime.timezone.utc)),
+        # dateutil returns naive datetimes for offset-less input; that behaviour is unchanged
+        ("20230717", datetime.datetime(2023, 7, 17)),  # noqa: DTZ001
+        ("202307171543", datetime.datetime(2023, 7, 17, 15, 43)),  # noqa: DTZ001
+        ("20230717154326", datetime.datetime(2023, 7, 17, 15, 43, 26)),  # noqa: DTZ001
+    ]
+    )
 def test_parse_str_type_to_value_datetime_epoch_and_iso(value, expected):
     from maltego.model.entity import coerce_property_type_from_value, parse_str_type_to_value
     assert parse_str_type_to_value(value, "DATE_TIME") == expected
@@ -1009,3 +1127,30 @@ def test_from_v3_run_entity_unparseable_property_warns_without_raw_value(caplog)
     assert "secret-not-a-date" not in caplog.text
     records = [r for r in caplog.records if "seen" in r.getMessage()]
     assert records and all(r.levelname == "WARNING" and r.exc_info is None for r in records)
+
+
+def test_from_v3_run_entity_sets_instance_version() -> None:
+    run_model = TransformRunEntity(
+        id="entity-1",
+        type=Phrase.TYPE_NAME,
+        version="2.0.0",
+        value_ref="text",
+        properties=[Property(name="text", type="STRING", value="hello")],
+    )
+
+    entity = MaltegoEntity.from_v3_run_entity(run_model)
+
+    assert entity.INSTANCE_VERSION == "2.0.0"
+
+
+def test_from_v3_run_entity_instance_version_defaults_to_none_when_absent() -> None:
+    run_model = TransformRunEntity(
+        id="entity-2",
+        type=Phrase.TYPE_NAME,
+        value_ref="text",
+        properties=[Property(name="text", type="STRING", value="hello")],
+    )
+
+    entity = MaltegoEntity.from_v3_run_entity(run_model)
+
+    assert entity.INSTANCE_VERSION is None
