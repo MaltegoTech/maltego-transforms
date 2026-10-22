@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Security
+
+- Require Pillow `>=13.0.0,<14`. Pillow 12.3.0 and older are affected by
+  advisories fixed in 13.0.0, including GHSA-8g5g-8vmr-9782 (critical),
+  GHSA-58r4-6rv3-gfh8, GHSA-65qm-jvmh-6pqg, GHSA-q45j-58j2-45rg,
+  GHSA-pchr-8j38-3x4p, GHSA-p4wg-p73j-c528, GHSA-c6hw-5grf-ff96 (high),
+  GHSA-vx6w-vv9f-6gvg and GHSA-462x-pgg6-55fp (medium). Entity icon
+  generation is unchanged.
+
 ### Changed
 
 - Python 3.11 is now the minimum supported version (`Requires-Python:

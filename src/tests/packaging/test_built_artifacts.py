@@ -5,6 +5,7 @@ from pathlib import Path
 from email.parser import Parser
 
 import pytest
+from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
 
 pytestmark = pytest.mark.packaging
@@ -120,6 +121,18 @@ def test_built_wheel_python_metadata_is_consistent(tmp_path: Path) -> None:
     assert classified
     assert [version for version in classified if not requires_python.contains(version)] == []
 
+
+def test_built_wheel_excludes_pillow_before_13(tmp_path: Path) -> None:
+    # 12.3.0 is the last Pillow release affected by the advisories fixed in
+    # 13.0.0. Later floor or upper-bound changes must not re-admit it.
+    dist_dir = build_artifacts(tmp_path)
+    wheel_path = next(dist_dir.glob("*.whl"))
+    metadata = Parser().parsestr(read_wheel_metadata(wheel_path))
+
+    requirements = [Requirement(entry) for entry in metadata.get_all("Requires-Dist", [])]
+    pillow = [requirement.specifier for requirement in requirements if requirement.name.lower() == "pillow"]
+    assert len(pillow) == 1
+    assert not pillow[0].contains("12.3.0", prereleases=True)
 
 
 def test_built_wheel_contains_no_internal_terms(tmp_path: Path) -> None:
