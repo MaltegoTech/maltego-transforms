@@ -1,7 +1,7 @@
 ---
 name: "maltego-transform-discover"
 description: "Load this skill when discovering what transforms and entities a running SDK server exposes, using direct server endpoints."
-compatibility: "Requires Python 3.10+ and a running maltego-transforms SDK server (default http://127.0.0.1:8080); the discovery script and curl examples make live HTTP calls to it."
+compatibility: "Requires Python 3.11+ and a running maltego-transforms SDK server (default http://127.0.0.1:8080); the discovery script and curl examples make live HTTP calls to it."
 metadata:
   version: "1.0.0"
 ---

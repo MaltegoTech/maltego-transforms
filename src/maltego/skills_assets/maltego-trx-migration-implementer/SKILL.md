@@ -1,7 +1,7 @@
 ---
 name: "maltego-trx-migration-implementer"
 description: "Load this skill when executing a TRX-to-SDK migration plan: rewriting transform classes to async SDK functions, mapping entities, and preserving unsupported patterns."
-compatibility: "Requires Python 3.10+ and local access to the source TRX project; post-migration verification needs a running SDK server (default http://127.0.0.1:8080)."
+compatibility: "Requires Python 3.11+ and local access to the source TRX project; post-migration verification needs a running SDK server (default http://127.0.0.1:8080)."
 metadata:
   version: "1.0.0"
 ---

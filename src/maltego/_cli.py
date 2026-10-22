@@ -233,7 +233,7 @@ def render_pyproject(project_name: str, project_manager: str) -> Optional[str]:
         "[project]",
         f'name = "{normalized_name}"',
         'version = "0.1.0"',
-        'requires-python = ">=3.10"',
+        'requires-python = ">=3.11"',
         "dependencies = [",
         '    "maltego-transforms>=1.3.0",',
         '    "maltego-transforms-std-entities>=1.0.0",',

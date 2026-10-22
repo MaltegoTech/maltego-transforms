@@ -19,7 +19,7 @@ Orient agents working in the `maltego-transforms` SDK repository. Use this skill
 - **Public packages**:
   - `maltego-transforms` — core SDK
   - `maltego-transforms-std-entities` — standard entity library
-- **Supported Python**: `>=3.10,<3.15`
+- **Supported Python**: `>=3.11,<3.15`
 - **Docs overview**: `https://docs.maltego.com/en/support/solutions/articles/15000062349-maltego-transforms-sdk-overview`
 
 ## Routing — Load the Right Skill

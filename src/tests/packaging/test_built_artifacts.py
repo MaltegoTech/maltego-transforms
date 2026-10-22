@@ -5,6 +5,7 @@ from pathlib import Path
 from email.parser import Parser
 
 import pytest
+from packaging.specifiers import SpecifierSet
 
 pytestmark = pytest.mark.packaging
 
@@ -103,14 +104,22 @@ def test_built_sdist_excludes_private_and_classic_material(tmp_path: Path) -> No
     assert_no_public_artifact_forbidden_entries(sdist_entries(sdist_path))
 
 
-def test_built_wheel_requires_python_matches_support_policy(tmp_path: Path) -> None:
-    # Python 3.14 is supported (PEP 649 annotation handling and the pydantic 2.13
-    # bump are validated under 3.14); 3.15 is the next excluded major.
+def test_built_wheel_python_metadata_is_consistent(tmp_path: Path) -> None:
+    # Python 3.10 is end of life and Pillow 13 requires 3.11, so no release may
+    # re-admit it. Classifiers must only advertise versions Requires-Python allows.
     dist_dir = build_artifacts(tmp_path)
     wheel_path = next(dist_dir.glob("*.whl"))
     metadata = Parser().parsestr(read_wheel_metadata(wheel_path))
 
-    assert metadata["Requires-Python"] == ">=3.10,<3.15"
+    requires_python = SpecifierSet(metadata["Requires-Python"])
+    classified = [
+        classifier.rsplit(" :: ", 1)[1] for classifier in metadata.get_all("Classifier", [])
+        if classifier.startswith("Programming Language :: Python :: 3.")
+    ]
+    assert not requires_python.contains("3.10")
+    assert classified
+    assert [version for version in classified if not requires_python.contains(version)] == []
+
 
 
 def test_built_wheel_contains_no_internal_terms(tmp_path: Path) -> None:

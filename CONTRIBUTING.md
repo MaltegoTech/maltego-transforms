@@ -9,7 +9,7 @@ bug, improving docs, or adding a feature — thank you for taking the time.
 
 ## Prerequisites
 
-- **Python 3.10–3.14**
+- **Python 3.11–3.14**
 - [**Poetry**](https://python-poetry.org/) for dependency management
 - [**git**](https://git-scm.com/)
 - [**pre-commit**](https://pre-commit.com/) (optional but recommended)

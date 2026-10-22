@@ -70,6 +70,7 @@ def test_start_supports_explicit_project_manager(tmp_path, monkeypatch, project_
     else:
         pyproject = pyproject_path.read_text()
         assert 'name = "managed-project"' in pyproject
+        assert 'requires-python = ">=3.11"' in pyproject
         assert '    "maltego-transforms>=1.3.0",' in pyproject
         assert '    "maltego-transforms-std-entities>=1.0.0",' in pyproject
         if project_manager == "poetry":

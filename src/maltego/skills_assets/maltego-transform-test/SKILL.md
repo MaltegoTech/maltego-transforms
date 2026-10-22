@@ -1,7 +1,7 @@
 ---
 name: "maltego-transform-test"
 description: "Load this skill when testing a local SDK transform server: syntax checks, discovery endpoint validation, and transform request/response assertions."
-compatibility: "Requires Python 3.10+ and a running maltego-transforms SDK server (default http://127.0.0.1:8080); the check script makes live HTTP calls and the pytest fixture examples need pytest and httpx."
+compatibility: "Requires Python 3.11+ and a running maltego-transforms SDK server (default http://127.0.0.1:8080); the check script makes live HTTP calls and the pytest fixture examples need pytest and httpx."
 metadata:
   version: "1.0.0"
 ---
