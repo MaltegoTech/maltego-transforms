@@ -162,7 +162,7 @@ def test_threaded_runner_shutdown_closes_loop_with_pending_tasks():
     assert startup_event.wait(timeout=1)
 
     loop = runner.loops[0]
-    asyncio.run_coroutine_threadsafe(asyncio.sleep(60), loop)
+    _scheduled = asyncio.run_coroutine_threadsafe(asyncio.sleep(60), loop)  # keep the task referenced until the test ends
     loop.call_soon_threadsafe(loop.stop)
     thread.join(timeout=1)
 
@@ -205,7 +205,7 @@ def test_threaded_runner_shutdown_awaits_cancelled_task_finalizers():
     assert startup_event.wait(timeout=1)
 
     loop = runner.loops[0]
-    asyncio.run_coroutine_threadsafe(waits_until_cancelled(), loop)
+    _scheduled = asyncio.run_coroutine_threadsafe(waits_until_cancelled(), loop)  # keep the task referenced until the test ends
     assert task_started.wait(timeout=1)
     runner.shutdown()
     thread.join(timeout=1)
@@ -240,7 +240,7 @@ def test_threaded_runner_shutdown_retries_cancellation_after_grace_period():
 
     runner.startup()
     loop = runner.loops[0]
-    asyncio.run_coroutine_threadsafe(absorbs_one_cancellation(), loop)
+    _scheduled = asyncio.run_coroutine_threadsafe(absorbs_one_cancellation(), loop)  # keep the task referenced until the test ends
     assert task_started.wait(timeout=1)
 
     def shutdown_runner() -> None:
@@ -323,7 +323,7 @@ def test_threaded_runner_shutdown_cancels_tasks_started_by_finalizers():
 
     runner.startup()
     loop = runner.loops[0]
-    asyncio.run_coroutine_threadsafe(starts_child_during_cancellation(), loop)
+    _scheduled = asyncio.run_coroutine_threadsafe(starts_child_during_cancellation(), loop)  # keep the task referenced until the test ends
     assert parent_started.wait(timeout=1)
 
     runner.shutdown()
@@ -364,7 +364,7 @@ def test_threaded_runner_shutdown_drains_nested_finalizer_tasks():
 
     runner.startup()
     loop = runner.loops[0]
-    asyncio.run_coroutine_threadsafe(starts_child_during_cancellation(), loop)
+    _scheduled = asyncio.run_coroutine_threadsafe(starts_child_during_cancellation(), loop)  # keep the task referenced until the test ends
     assert parent_started.wait(timeout=1)
 
     runner.shutdown()
@@ -398,7 +398,7 @@ def test_threaded_runner_shutdown_allows_cooperative_cleanup_to_finish():
 
     runner.startup()
     loop = runner.loops[0]
-    asyncio.run_coroutine_threadsafe(completes_cleanup_after_cancellation(), loop)
+    _scheduled = asyncio.run_coroutine_threadsafe(completes_cleanup_after_cancellation(), loop)  # keep the task referenced until the test ends
     assert task_started.wait(timeout=1)
 
     runner.shutdown()
@@ -461,7 +461,7 @@ def test_threaded_runner_shutdown_cancels_real_after_transform_hook():
     runner.startup()
     loop = runner.loops[0]
     execution_context.set_event_loop(loop)
-    asyncio.run_coroutine_threadsafe(execution_context.start(), loop)
+    _scheduled = asyncio.run_coroutine_threadsafe(execution_context.start(), loop)  # keep the task referenced until the test ends
     assert after_transform_started.wait(timeout=1)
 
     runner.shutdown()
