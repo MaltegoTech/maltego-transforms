@@ -30,7 +30,7 @@ maltego-transforms start --project-manager uv <project_name>
 
 ## Setup
 
-Create a virtual environment using Python 3.10 or newer:
+Create a virtual environment using Python 3.11 or newer:
 
 ```bash
 python -m venv .venv

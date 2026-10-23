@@ -29,7 +29,7 @@ Full documentation (quickstart, setup, entity features, pagination, migration, â
 
 ## Setup, build, test (public tooling only)
 
-Supported Python: **>=3.10, <3.15**. The repo uses **Poetry**.
+Supported Python: **>=3.11, <3.15**. The repo uses **Poetry**.
 
 ```bash
 # Working ON the SDK itself

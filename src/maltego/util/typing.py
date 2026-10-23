@@ -1,6 +1,5 @@
 # Copyright (c) Maltego Technologies GmbH.
 import inspect
-import sys
 import types
 import typing
 from typing import Any
@@ -16,8 +15,5 @@ def is_any_union_type(
     if origin is typing.Union:
         return True
 
-    if sys.version_info >= (3, 10):
-        # implicit via List[A | ...]
-        return inspect.isclass(origin) and issubclass(origin, types.UnionType)  # pylint: disable=no-member
-
-    return False
+    # implicit via List[A | ...]
+    return inspect.isclass(origin) and issubclass(origin, types.UnionType)

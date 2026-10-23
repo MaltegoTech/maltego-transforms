@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.4.0 - 2026-10-23
+
+### Security
+
+- Require Pillow `>=13.0.0,<14`. Pillow 12.3.0 and older are affected by
+  advisories fixed in 13.0.0, including GHSA-8g5g-8vmr-9782 (critical),
+  GHSA-58r4-6rv3-gfh8, GHSA-65qm-jvmh-6pqg, GHSA-q45j-58j2-45rg,
+  GHSA-pchr-8j38-3x4p, GHSA-p4wg-p73j-c528, GHSA-c6hw-5grf-ff96 (high),
+  GHSA-vx6w-vv9f-6gvg and GHSA-462x-pgg6-55fp (medium). Entity icon
+  generation is unchanged.
+
+### Changed
+
+- Python 3.11 is now the minimum supported version (`Requires-Python:
+  >=3.11,<3.15`). Python 3.10 reached end of life on 2026-10-01. Installers
+  keep Python 3.10 environments on the last release that supports it.
+  Projects generated with `--project-manager poetry` or `uv` now declare
+  `requires-python = ">=3.11"`.
+
 ## 1.3.0 - 2026-10-08
 
 ### Added

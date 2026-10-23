@@ -19,7 +19,7 @@ A **transform** takes one or more Maltego entities as input — an IP address, a
 pip install maltego-transforms
 ```
 
-Requires Python `>=3.10,<3.15`.
+Requires Python `>=3.11,<3.15`.
 
 ## Your first transform
 

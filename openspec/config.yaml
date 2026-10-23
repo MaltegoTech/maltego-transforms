@@ -1,7 +1,7 @@
 schema: sdk
 context: |
   maltego-transforms is a Python SDK for authoring asynchronous Maltego
-  transform servers. Support Python 3.10 through 3.14 and preserve SDK API,
+  transform servers. Support Python 3.11 through 3.14 and preserve SDK API,
   wire compatibility, generated-project behavior, and existing transform
   discovery contracts.
 

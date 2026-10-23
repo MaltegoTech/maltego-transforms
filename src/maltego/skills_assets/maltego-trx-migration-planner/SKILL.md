@@ -1,7 +1,7 @@
 ---
 name: "maltego-trx-migration-planner"
 description: "Load this skill when planning a migration from TRX-based transforms to SDK: read-only project analysis, entity mapping, difficulty classification, and producing a migration plan."
-compatibility: "Requires Python 3.10+ and local read access to the source TRX project; the analysis scripts use only the Python standard library."
+compatibility: "Requires Python 3.11+ and local read access to the source TRX project; the analysis scripts use only the Python standard library."
 metadata:
   version: "1.0.0"
 ---
