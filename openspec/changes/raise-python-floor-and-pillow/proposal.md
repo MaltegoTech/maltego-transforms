@@ -37,6 +37,7 @@ Each change and its reason:
 | 6 | Pillow requirement becomes `>=13.0.0,<14` and the lock moves to 13.0.0 | `pyproject.toml`, `poetry.lock` | Fixes the advisories above |
 | 7 | Remove the `types-Pillow` development dependency | `pyproject.toml`, `poetry.lock` | Pillow 13 ships its own type information; the old stubs describe Pillow 10 and would override it for type checkers |
 | 8 | Changelog entries | `CHANGELOG.md` | User-facing change |
+| 9 | Release as 1.4.0: package version, `maltego.server.version`, and the `maltego-transforms>=` floor in generated projects and both templates | `pyproject.toml`, `src/maltego/server/version.py`, `src/maltego/_cli.py`, template `requirements.txt` files | The Pillow fix reaches users only through a release, and generated projects then cannot resolve to the vulnerable SDK |
 
 Non-goals:
 
@@ -45,7 +46,6 @@ Non-goals:
 - No multi-version test matrix; CI keeps one interpreter.
 - No change to how releases are published or attested; only the interpreter
   used to install, test and build changes.
-- No version bump; the release version is chosen when the release is cut.
 - No unrelated dependency upgrades. The lock refresh may only remove
   packages needed solely on Python 3.10, move Pillow to 13.0.0 and drop
   `types-Pillow`.

@@ -22,11 +22,11 @@ patch increment to Commitizen. Commitizen's suggestion is not reliable here
 anyway: the release tags are `vX.Y.Z` while `tag_format` is `$version`, so
 `cz bump --dry-run` also counts commits from before the last release.
 Dropping a supported Python version should ship in at least a minor release,
-so the release cutter sets the version explicitly.
+so the version is set by hand to 1.4.0 in the final commit of this change.
 
-The `Unreleased` section of `CHANGELOG.md` is hand-written, like the existing
-entries. `cz bump --changelog` would replace it with generated lines, so it is
-folded into the release heading by hand.
+The `Unreleased` changelog section is hand-written, like the existing entries,
+and becomes the `1.4.0` heading by hand. `cz bump --changelog` would replace
+it with generated lines.
 
 ### Alternative rejected: split the Pillow requirement by Python version
 
