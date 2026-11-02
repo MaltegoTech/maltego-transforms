@@ -513,7 +513,8 @@ def test_setup_applies_scheduled_cleanup_seconds(configured, expected) -> None:
         server.runner.shutdown()
 
 
-def test_cleanup_runners_reaps_stale_runs_of_concatenated_servers() -> None:
+@pytest.mark.asyncio
+async def test_cleanup_runners_reaps_stale_runs_of_concatenated_servers() -> None:
     main_settings = MaltegoServerSettings(server_name="main", ns="main", author="maltoso")
     other_settings = MaltegoServerSettings(
         server_name="extra",
@@ -550,6 +551,7 @@ def test_cleanup_runners_reaps_stale_runs_of_concatenated_servers() -> None:
 
     try:
         main_server.cleanup_runners()
+        await execution_context.start()
         assert execution_context.result.state == ExecutionState.TIMED_OUT
     finally:
         main_server.runner.shutdown()

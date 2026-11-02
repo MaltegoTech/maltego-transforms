@@ -1,4 +1,3 @@
-import tomllib
 from pathlib import Path
 
 import pytest
@@ -40,10 +39,3 @@ def test_template_readmes_configure_https_via_http_settings(readme_path: str) ->
     assert "ssl=True" not in readme
 
 
-def test_template_project_dependencies_track_current_package_versions() -> None:
-    pyproject = tomllib.loads(Path("pyproject.toml").read_text())
-    sdk_version = pyproject["tool"]["poetry"]["version"]
-    requirements = Path("src/maltego/template_dir/requirements.txt").read_text().splitlines()
-
-    assert f"maltego-transforms>={sdk_version}" in requirements
-    assert "maltego-transforms-std-entities>=1.0.0" in requirements

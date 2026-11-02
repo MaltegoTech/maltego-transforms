@@ -11,8 +11,8 @@ from maltego.model.exception import MaltegoException
 from maltego.model.types import ExecutionState
 
 
-TERMINAL_STATES = (ExecutionState.COMPLETED,
-                   ExecutionState.CANCELED, ExecutionState.FAILED)
+TERMINAL_STATES = (ExecutionState.COMPLETED, ExecutionState.CANCELED,
+                   ExecutionState.FAILED, ExecutionState.TIMED_OUT)
 
 
 class TransformResultSet:
@@ -117,11 +117,15 @@ class TransformResultSet:
             curr_event.updates['_properties'].extend(
                 next_event.updates['_properties'])
 
-    def push_exception(self, exception: MaltegoException) -> None:
+    def push_exception(self, exception: MaltegoException, state: Optional[ExecutionState] = None) -> None:
+        """Record the exception and queue its message for the user.
+
+        ``state`` is the state the run is about to take (default: its current one). Callers queue the message first and
+        set the terminal state after it, so a poll never reads a terminal state without the message."""
         self.__update()
         self.exception_stack.append(exception)
         self.output.append(TransformMessageEvent(log_tuple=(
-            "FatalError", str(exception.message)), state=self.state.value))
+            "FatalError", str(exception.message)), state=(self.state if state is None else state).value))
 
     def pop_exception(self) -> MaltegoException:
         return self.exception_stack.pop(-1)

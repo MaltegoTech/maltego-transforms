@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Fixed
+
+- Terminal V3 results now wait for execution and eligible cleanup, retaining final messages and events for paging.
+- Cancellation reaches the worker loop; inactivity expiry stops active runs instead of allowing them to report success later.
+- Multi-input outcomes preserve failures and wait for every input. Later eligible cleanup hooks now run after a hook fails.
+
+POST cancel remains an immediate acknowledgement. Clients must keep polling through nonterminal states and drain all
+remaining pages before DELETE; a terminal response does not mean one page contains every event.
+
 ## 1.4.0 - 2026-10-23
 
 ### Security

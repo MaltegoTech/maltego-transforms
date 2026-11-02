@@ -1480,7 +1480,10 @@ class V3Server:
         # add current transform run duration to the polling response header
         set_run_duration_header(duration, response)
 
-        set_state_header(transform_result.state, response)
+        # Capture state before gathering events: a terminal snapshot makes the final
+        # stream available for paging, not necessarily contained in this one page.
+        state = transform_result.state
+        set_state_header(state, response)
         set_vary_headers(response)
 
         ua = MaltegoUserAgent(user_agent)
@@ -1511,7 +1514,7 @@ class V3Server:
                         event_pointer:boundary_index]
                 ],
                 run_id=run_id,
-                state=ExecutionState.FAILED.value if transform_result.state is ExecutionState.TIMED_OUT else transform_result.state.value,
+                state=ExecutionState.FAILED.value if state is ExecutionState.TIMED_OUT else state.value,
                 start_time=str(transform_result.start_time),
                 update_time=str(transform_result.update_time),
             ),

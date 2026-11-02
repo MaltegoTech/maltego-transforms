@@ -720,7 +720,8 @@ async def test_cleanup_skips_transform_waiting_for_prompt():
     runner._TransformRunner__delete(run_id)
 
 
-def test_cleanup_marks_stale_v3_run_timed_out():
+@pytest.mark.asyncio
+async def test_cleanup_marks_stale_v3_run_timed_out():
     runner = create_test_runner(retention_time=1)
     execution_context = create_v3_execution_context()
     run_id = runner._TransformRunner__add(execution_context)
@@ -730,6 +731,8 @@ def test_cleanup_marks_stale_v3_run_timed_out():
     runner.cleanup()
 
     assert run_id in runner._TransformRunner__transform_queue
+    assert result_set.state == ExecutionState.INITIALIZED
+    await execution_context.start()
     assert result_set.state == ExecutionState.TIMED_OUT
     assert len(result_set.exceptions) == 1
     timeout_exception = result_set.exceptions[0]
@@ -773,7 +776,8 @@ def test_cleanup_tolerates_run_deleted_during_cleanup_iteration():
 
 
 
-def test_cleanup_times_out_expired_multiplexed_run_and_continues_after_failure():
+@pytest.mark.asyncio
+async def test_cleanup_times_out_expired_multiplexed_run_and_continues_after_failure():
     runner = create_test_runner(retention_time=1)
     broken = MagicMock()
     broken.run_id = "broken-run"
@@ -788,6 +792,9 @@ def test_cleanup_times_out_expired_multiplexed_run_and_continues_after_failure()
     make_result_stale(single.result)
 
     runner.cleanup()
+    assert mux.result.state == ExecutionState.INITIALIZED
+    await mux.start()
+    await single.start()
 
     assert mux.result.state == ExecutionState.TIMED_OUT
     for ctx in mux.contexts:
