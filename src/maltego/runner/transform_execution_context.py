@@ -4,6 +4,7 @@ import queue
 import asyncio
 import logging
 from datetime import datetime
+from threading import Lock
 from typing import Union, List, Any, Dict, Optional, Iterable
 
 from maltego.middlewares.middlewares import TransformMiddleware
@@ -34,6 +35,14 @@ from maltego.runner.transform_result_set import TERMINAL_STATES, TransformResult
 from maltego.util.collections_utils import flatten
 
 log = logging.getLogger(__name__)
+OUTCOME_PRECEDENCE = {
+    ExecutionState.FINISHED: 0,
+    ExecutionState.COMPLETED: 0,
+    ExecutionState.CANCELED: 1,
+    ExecutionState.FAILED: 2,
+    ExecutionState.TIMED_OUT: 3,
+}
+
 
 
 class MultiplexedTransformResultSet:
@@ -101,9 +110,11 @@ class MultiplexedTransformResultSet:
 
     @property
     def state(self) -> ExecutionState:
-        state_order = list(ExecutionState)
-        min_state = min(state_order.index(r.state) for r in self.results)
-        return state_order[min_state]
+        states = [result.state for result in self.results]
+        active = [state for state in states if state not in TERMINAL_STATES]
+        if active:
+            return min(active, key=list(ExecutionState).index)
+        return max(states, key=OUTCOME_PRECEDENCE.__getitem__)
 
     @property
     def start_time(self) -> datetime:
@@ -126,9 +137,9 @@ class MultiplexedTransformResultSet:
         for r in self.results:
             r.state = value
 
-    def push_exception(self, exception: MaltegoException) -> None:
+    def push_exception(self, exception: MaltegoException, state: Optional[ExecutionState] = None) -> None:
         for r in self.results:
-            r.push_exception(exception)
+            r.push_exception(exception, state=state)
 
     @update_time.setter
     def update_time(self, value):
@@ -206,6 +217,10 @@ class MultiplexedTransformExecutionContext:
     def cancel(self) -> None:
         for ctx in self.contexts:
             ctx.cancel()
+
+    def expire(self, exception: MaltegoTransformTimeoutError) -> None:
+        for ctx in self.contexts:
+            ctx.expire(exception)
 
     async def receive_input(self, transform_input: TransformRunExecutionInput) -> None:
         for ctx in self.contexts:
@@ -295,6 +310,12 @@ class TransformExecutionContext:
         )
         self.input_queue: asyncio.Queue[TransformRunExecutionInput] = asyncio.Queue()
         self.loop: Optional[asyncio.AbstractEventLoop] = None
+        self._lock = Lock()
+        self._outcome = ExecutionState.FINISHED
+        self._stop_requested = False
+        self._active_task: Optional[asyncio.Task] = None
+        self._timeout_exception: Optional[MaltegoTransformTimeoutError] = None
+        self._timeout_requested = False
         self.start_time = None
         self.end_time = None
         context.set_input_queue(self.input_queue)
@@ -329,24 +350,69 @@ class TransformExecutionContext:
         return False
 
     def cancel(self) -> None:
-        """Cancel a running transform
+        """Request cancellation without interrupting the orchestration task."""
+        self.__request_stop(ExecutionState.CANCELED)
 
-        """
-        if self.before_transform_task:
-            self.before_transform_task.cancel()
-        if self.task:
-            self.task.cancel()
-        if self.after_transform_task:
-            self.after_transform_task.cancel()
-        self.result.set_end_time()
+    def expire(self, exception: MaltegoTransformTimeoutError) -> None:
+        """Request an inactivity timeout on the owning execution loop."""
+        self.__request_stop(ExecutionState.TIMED_OUT, exception)
 
-    def __handle_task_exception(self, exception: BaseException) -> None:
+    def __request_stop(
+        self, outcome: ExecutionState, exception: Optional[MaltegoTransformTimeoutError] = None
+    ) -> None:
+        with self._lock:
+            if self.result.state in TERMINAL_STATES:
+                return
+            if OUTCOME_PRECEDENCE[outcome] > OUTCOME_PRECEDENCE[self._outcome]:
+                self._outcome = outcome
+            if exception is not None and not self._timeout_requested:
+                self._timeout_exception = exception
+                self._timeout_requested = True
+            first_request = not self._stop_requested
+            self._stop_requested = True
+            task, loop = self._active_task, self.loop
+        if first_request and task is not None and loop is not None:
+            loop.call_soon_threadsafe(task.cancel)
+
+    def __record_timeout_locked(self) -> None:
+        if self._timeout_exception is not None:
+            self.result.push_exception(self._timeout_exception, state=ExecutionState.TIMED_OUT)
+            self._timeout_exception = None
+
+    def __record_timeout(self) -> None:
+        with self._lock:
+            self.__record_timeout_locked()
+
+    @staticmethod
+    async def __wait_for_phase(task: asyncio.Task, timeout: float) -> None:
+        # Keep wait_for's timeout cleanup alive if its caller is cancelled
+        # (notably on Python 3.11). The producer must finish before finality.
+        waiter = asyncio.create_task(asyncio.wait_for(task, timeout))
+        try:
+            await asyncio.shield(waiter)
+        except asyncio.CancelledError:
+            if not task.cancelling():
+                task.cancel()
+            while not waiter.done() or not task.done():
+                try:
+                    await asyncio.wait({waiter, task})
+                except asyncio.CancelledError:
+                    continue
+            if waiter.cancelled() and not task.cancelled():
+                error = task.exception()
+                if error is not None:
+                    raise error
+            waiter.result()
+            raise
+
+    def __handle_task_exception(self, exception: BaseException, state: ExecutionState = ExecutionState.FAILED) -> None:
+        """Record an outcome without publishing a terminal result during cleanup."""
         try:
             raise exception
         except asyncio.InvalidStateError as ex:
             raise ex  # Task not finished yet. Since we are awaiting this shouldn't be possible
         except asyncio.CancelledError:  # Task was manually canceled. Not implemented right now
-            self.result.state = ExecutionState.CANCELED
+            state = ExecutionState.CANCELED
         except MaltegoWarning as warning:
             self.result.context.log.partial(warning.message)
             self.result.code = warning.classic_status_code
@@ -354,7 +420,7 @@ class TransformExecutionContext:
             # Client errors (bad input, not found, unauthorized) are expected user-facing outcomes.
             log_fn = log.warning if isinstance(ex, MaltegoHTTPClientError) else log.error
             log_fn(f"Transform threw {type(ex).__name__}: {ex.message}")
-            self.result.push_exception(ex)
+            self.result.push_exception(ex, state=state)
             if isinstance(ex, MaltegoHTTPServerError):
                 self.result.code = ex.status_code
         except Exception:  # pylint: disable=broad-except # Since Middlewares/Transforms can trow arbitrary exceptions
@@ -368,81 +434,66 @@ class TransformExecutionContext:
             if trace_id:
                 message += f" Error ID: {trace_id}"
             new_e = MaltegoException(message=message, code=500)
-            self.result.push_exception(new_e)
-        assert self.result.state in (
-            ExecutionState.FAILED, ExecutionState.CANCELED, ExecutionState.TIMED_OUT)
+            self.result.push_exception(new_e, state=state)
+        with self._lock:
+            if OUTCOME_PRECEDENCE[state] > OUTCOME_PRECEDENCE[self._outcome]:
+                self._outcome = state
 
     async def run(self) -> None:
-        """Main handler for the state machine.
-
-        The order always should follow INITIALIZED->RUNNING->FINISHED->COMPLETED or FAILED, CANCELED at any point
-        """
+        """Run each phase and publish the outcome only after cleanup finishes."""
+        self.loop = asyncio.get_running_loop()
+        self.result.set_start_time()
         try:
-            self.result.set_start_time()
-            if self.result.state == ExecutionState.INITIALIZED:
-                assert self.before_transform_task is None
-                self.before_transform_task = asyncio.create_task(
-                    self.__before_transform()
-                )
+            with self._lock:
+                if not self._stop_requested:
+                    self.before_transform_task = asyncio.create_task(self.__before_transform())
+                    self._active_task = self.before_transform_task
+            if self.before_transform_task is not None:
                 await self.before_transform_task
-            if self.result.state == ExecutionState.RUNNING:
-                assert self.task is None
-                self.task = asyncio.create_task(self.__transform())
+            with self._lock:
+                self._active_task = None
+                if not self._stop_requested and self.result.state == ExecutionState.RUNNING:
+                    self.task = asyncio.create_task(self.__transform())
+                    self._active_task = self.task
+            if self.task is not None:
                 try:
-                    await asyncio.wait_for(self.task, self.transform_execution_timeout)
+                    await self.__wait_for_phase(self.task, self.transform_execution_timeout)
                 except TimeoutError:
-                    log.exception(
-                        "Timeout while executing transform.", exc_info=True)
-                    self.result.state = ExecutionState.TIMED_OUT
                     raise MaltegoTransformTimeoutError(
                         f"Timeout after {self.transform_execution_timeout}s "
                         f"reached while executing {self.transform.name}"
                     )
         except MaltegoTransformTimeoutError as e:
-            log.exception("Timeout while executing transform.", exc_info=True)
-            self.result.state = ExecutionState.TIMED_OUT
-            self.__handle_task_exception(e)
-        except SystemExit as e:
-            raise e
-        except KeyboardInterrupt as e:
-            raise e
-        except BaseException as e:  # pylint: disable=broad-except # Since Middlewares/Transforms can trow arbitrary exceptions
-            if self.result.state is not ExecutionState.TIMED_OUT:
-                self.result.state = ExecutionState.FAILED
-            self.__handle_task_exception(e)
-        try:
-            if self.result.state in (ExecutionState.FINISHED,
-                                     ExecutionState.FAILED,
-                                     ExecutionState.CANCELED,
-                                     ExecutionState.TIMED_OUT):
-                assert self.after_transform_task is None
-                self.after_transform_task = asyncio.create_task(
-                    self.__after_transform()
-                )
-                await self.after_transform_task
-        except SystemExit as e:
-            raise e
-        except KeyboardInterrupt as e:
-            raise e
-        except (
-            BaseException
-        ) as e:  # pylint: disable=broad-except # Since Middlewares/Transforms can trow arbitrary exceptions
-            if self.result.state is not ExecutionState.TIMED_OUT:
-                self.result.state = ExecutionState.FAILED
+            self.__handle_task_exception(e, ExecutionState.TIMED_OUT)
+        except (SystemExit, KeyboardInterrupt):
+            raise
+        except BaseException as e:  # pylint: disable=broad-except
             self.__handle_task_exception(e)
         finally:
-            self.result.set_end_time()
+            with self._lock:
+                self._active_task = None
+
+        self.__record_timeout()
+        self.result.state = ExecutionState.FINISHED
+        try:
+            self.after_transform_task = asyncio.create_task(self.__after_transform())
+            await self.after_transform_task
+        except (SystemExit, KeyboardInterrupt):
+            raise
+        except BaseException as e:  # pylint: disable=broad-except
+            self.__handle_task_exception(e)
+        finally:
+            with self._lock:
+                self._active_task = None
+                self.__record_timeout_locked()
+                self.result.set_end_time()
+                self.result.state = (
+                    ExecutionState.COMPLETED if self._outcome == ExecutionState.FINISHED else self._outcome
+                )
             log.info(
                 f"Transform run {self.run_id} completed in {self.result.get_duration()} milliseconds, "
                 f"with State {self.result.state}."
             )
-
-        assert self.result.state in (
-            ExecutionState.COMPLETED,
-            ExecutionState.FAILED,
-            ExecutionState.CANCELED,
-            ExecutionState.TIMED_OUT,
-        )
 
     def set_event_loop(self, loop: asyncio.AbstractEventLoop) -> None:
         self.loop = loop
@@ -492,17 +543,15 @@ class TransformExecutionContext:
         limit = self.limit or 12
         for middleware in self.middlewares:
             try:
-                await asyncio.wait_for(
-                    middleware.before_transform(
-                        self.transform,
-                        self.input,
-                        self.transform_settings,
-                        self.result.context,
-                        limit,
-                        limit
-                    ),
-                    self.middleware_execution_timeout,
-                )
+                hook_task = asyncio.create_task(middleware.before_transform(
+                    self.transform,
+                    self.input,
+                    self.transform_settings,
+                    self.result.context,
+                    limit,
+                    limit,
+                ))
+                await self.__wait_for_phase(hook_task, self.middleware_execution_timeout)
             except TimeoutError:
                 raise MaltegoException(
                     f"Timeout after {self.middleware_execution_timeout}s "
@@ -530,31 +579,40 @@ class TransformExecutionContext:
         return None
 
     async def __after_transform(self) -> None:
-        """Wrapper task to run middlewares after the transform
-        """
+        """Run every eligible hook, retaining failures and each hook's timeout."""
         for middleware in self.middlewares:
-            if self.result.state != ExecutionState.FINISHED and not middleware.call_on_failure:
-                continue
+            self.__record_timeout()
+            with self._lock:
+                outcome = self._outcome
+                if outcome != ExecutionState.FINISHED and not middleware.call_on_failure:
+                    continue
+                hook_task = asyncio.create_task(middleware.after_transform(
+                    self.transform,
+                    self.input,
+                    self.result.get_added_entities(),
+                    self.result.context,
+                    outcome,
+                    exceptions=self.result.exceptions,
+                ))
+                self._active_task = hook_task
             try:
-                await asyncio.wait_for(
-                    middleware.after_transform(
-                        self.transform,
-                        self.input,
-                        self.result.get_added_entities(),
-                        self.result.context,
-                        self.result.state,
-                        exceptions=self.result.exceptions,
-                    ),
-                    self.middleware_execution_timeout
-                )
+                await self.__wait_for_phase(hook_task, self.middleware_execution_timeout)
             except TimeoutError:
-                raise MaltegoException(
+                self.__handle_task_exception(MaltegoException(
                     f"Timeout after {self.middleware_execution_timeout}s "
                     f"in middleware '{middleware.__class__.__name__}' "
                     f"for '{self.transform.name}'"
-                )
-        if self.result.state == ExecutionState.FINISHED:
-            self.result.state = ExecutionState.COMPLETED
+                ))
+            except (SystemExit, KeyboardInterrupt):
+                raise
+            except BaseException as e:  # pylint: disable=broad-except
+                if asyncio.current_task().cancelling():
+                    raise
+                self.__handle_task_exception(e)
+            finally:
+                with self._lock:
+                    if self._active_task is hook_task:
+                        self._active_task = None
 
     def get_response_headers(self) -> dict[str, str]:
         return self.result.context.response_headers

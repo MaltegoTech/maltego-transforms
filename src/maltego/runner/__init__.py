@@ -180,13 +180,15 @@ class TransformRunner:
                         f"Execution context with id {run_id} is older than {self.retention_time}s. "
                         f"Marking as timed out."
                     )
-                    execution_context.result.state = ExecutionState.TIMED_OUT
-                    execution_context.result.push_exception(
-                        MaltegoTransformTimeoutError(
-                            f"Transform execution timed out after being inactive for {self.retention_time}s.",
-                            code=410
-                        )
+                    exception = MaltegoTransformTimeoutError(
+                        f"Transform execution timed out after being inactive for {self.retention_time}s.",
+                        code=410
                     )
+                    if execution_context.done():
+                        execution_context.result.push_exception(exception, state=ExecutionState.TIMED_OUT)
+                        execution_context.result.state = ExecutionState.TIMED_OUT
+                    else:
+                        execution_context.expire(exception)
                     execution_context.result.update_time = now
 
     def done(self, run_id: str) -> bool:
