@@ -22,7 +22,7 @@ from maltego.model.graph import MaltegoGraph
 from maltego.model.link import MaltegoLink
 from maltego.model.oauth import OAuthAuthenticator
 from maltego.model.prompt import TransformPromptResponse
-from maltego.model.server import EntityConfigOverrides, MaltegoHubItem, MaltegoServerSettings
+from maltego.model.server import EntityConfigOverrides, MaltegoHubItem, MaltegoServerSettings, PAGE_SIZE_DEFAULT
 from maltego.model.transform import MaltegoTransform
 from maltego.model.transform_set import TransformSet
 from maltego.model.types import MaltegoSettingTypes, ExecutionState
@@ -1201,7 +1201,7 @@ class V3Server:
 
     def get_event_limit(self, event_limit: int) -> int:
         if event_limit <= 0:
-            event_limit = self._settings.v3_page_size_max
+            event_limit = PAGE_SIZE_DEFAULT
         return min(event_limit, self._settings.v3_page_size_max)
 
     def __parse_transform_run_request(

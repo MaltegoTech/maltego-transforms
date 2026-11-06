@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A V3 results page now holds as many events as the client asks for with
+  `eventLimit`, up to `v3_page_size_max`, whose default is now 10,000 (was 50).
+  A client can request remaining events up to that maximum instead of being
+  limited to 50. Requests without `eventLimit` still get 50 events, or the
+  configured maximum if lower. `MALTEGO_SERVER_V3_PAGE_SIZE_MAX` and
+  `--v3-page-size-max` still set the maximum; servers with a higher maximum
+  now return 50 events when `eventLimit` is omitted.
 - Terminal V3 results now wait for execution and eligible cleanup, retaining final messages and events for paging.
 - Cancellation reaches the worker loop; inactivity expiry stops active runs instead of allowing them to report success later.
 - Multi-input outcomes preserve failures and wait for every input. Later eligible cleanup hooks now run after a hook fails.

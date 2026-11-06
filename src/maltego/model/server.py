@@ -92,7 +92,10 @@ def _check_deprecated_env_vars(values: Dict[str, Any]) -> Dict[str, Any]:
     
     return values
 
+# Events in a V3 results page when the client sends no eventLimit.
 PAGE_SIZE_DEFAULT = 50
+# Default upper bound of a V3 results page (the eventLimit a client may ask for).
+PAGE_SIZE_MAX_DEFAULT = 10_000
 
 
 class HTTPSettingsCLISource(PydanticBaseSettingsSource):
@@ -780,8 +783,9 @@ class MaltegoServerSettings(BaseSettings):
     :param transform_display_name_prefix: Adds a prefix to all discovered transforms display names
     :type transform_display_name_prefix: str, Optional
     :param v3_page_size_max:
-        Max supported JSON protocol page size sent in the OPTION response during discovery.
-        Currently not implemented in Maltego (4.7.0)
+        Largest V3 results page the server serves: a client's ``eventLimit`` is honoured up to this number of
+        events. A results request without ``eventLimit`` gets a page of 50 events (or this number, if lower).
+        Sent as the ``v3-page-size`` header in the OPTIONS response during discovery.
     :type v3_page_size_max: int
     :param entity_config_overrides:
         Optional per-client entity property overrides applied during JSON entity discovery (e.g. desktop vs web).
@@ -850,7 +854,7 @@ class MaltegoServerSettings(BaseSettings):
     transform_name_prefix: Optional[str] = None
     transform_app_name_prefix: Optional[str] = None
     transform_display_name_prefix: Optional[str] = None
-    v3_page_size_max: int = PAGE_SIZE_DEFAULT
+    v3_page_size_max: int = PAGE_SIZE_MAX_DEFAULT
     full_host_url: Optional[str] = None
     trust_forwarded_headers: bool = False
     api_prefix: Optional[str] = None
