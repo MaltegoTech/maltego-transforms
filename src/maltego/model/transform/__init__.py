@@ -31,6 +31,7 @@ from maltego.protocol.v3.discovery.transform import (
     TransformDefinitionCapabilities, TransformDiscoveryIO,
     V3TransformDefinition,
 )
+from maltego.util.trace_context import TRANSFORM_VAR
 
 log = logging.getLogger(__name__)
 
@@ -772,15 +773,24 @@ class MaltegoTransform:
         if not inspect.isfunction(self.impl):
             raise RuntimeError(
                 f"Invalid transform function {self.impl}: Not a function")
-        if is_async:
-            await self.__add_async_results(output_queue, is_asyncgen, params)
-        else:
-            await self.__add_sync_results(output_queue, params)
+        token = TRANSFORM_VAR.set(self._qualified_name())
+        try:
+            if is_async:
+                await self.__add_async_results(output_queue, is_asyncgen, params)
+            else:
+                await self.__add_sync_results(output_queue, params)
+        finally:
+            TRANSFORM_VAR.reset(token)
         if isinstance(transform_input, MaltegoGraph):
             self._unregister(transform_input, transform_graph_observer)
         if context is not None:
             context.graph.unregister(transform_graph_observer)
         return None
+
+    def _qualified_name(self) -> str:
+        """`<prefix>.<ns>.<name>` as discovery names the transform; parts that are not set are left out."""
+        ns = self.transform_ns if self.transform_ns else self._server_ns
+        return ".".join(part for part in (self.prefix, ns, self.name) if part)
 
     @staticmethod
     def remove_string_prefix(string: str, prefix: str) -> str:

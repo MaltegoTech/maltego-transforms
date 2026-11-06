@@ -1233,3 +1233,35 @@ def test_multiplexed_child_update_after_the_parent_copied_its_event_gets_a_new_i
     assert served[1].updates == {"note": "first"}
     assert len(results) == 4
     assert results[3].updates == {"note": "second"}
+
+
+@pytest.mark.asyncio
+async def test_a_blank_overlay_name_from_the_answer_does_not_fail_the_run(caplog):
+    """The entity and its other overlays survive; the warning names the transform and entity type."""
+
+    async def overlay_from_answer(input_entity: MockEntity) -> list[MockEntity]:
+        found = MockEntity("found")
+        found.add_overlay(OverlayTypes.TEXT, OverlayPositions.NORTH, "first")
+        found.add_overlay(OverlayTypes.TEXT, OverlayPositions.SOUTH, "")  # the answer had no value for this field
+        found.add_overlay(OverlayTypes.IMAGE, OverlayPositions.WEST, "last")
+        return [found]
+
+    transform = MaltegoTransform(
+        impl=overlay_from_answer, name="overlay_from_answer", display_name="x", description="x",
+        settings=[], transform_ns="test",
+    )
+    execution = TransformExecutionContext(
+        run_id="blank-overlay", transform=transform, transform_input=MockEntity("in"), transform_settings={},
+        limit=10, context=MaltegoContext(MaltegoGraph(), MagicMock(headers={}), v3_request=True),
+        transform_execution_timeout=60, middleware_execution_timeout=60,
+    )
+    with caplog.at_level("WARNING", logger="maltego.model.entity"):
+        await execution.start()
+
+    assert execution.result.state is ExecutionState.COMPLETED
+    entities = [event.to_v3_event().data.entity for event in execution.result.get_results()
+                if isinstance(event, TransformEntityEvent)]
+    assert [overlay.property_name for overlay in entities[0].overlays] == ["first", "last"]
+    [warning] = [r.getMessage() for r in caplog.records if r.name == "maltego.model.entity"]
+    assert "test.overlay_from_answer" in warning
+    assert MockEntity.TYPE_NAME in warning

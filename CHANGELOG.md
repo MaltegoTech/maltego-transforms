@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   configured maximum if lower. `MALTEGO_SERVER_V3_PAGE_SIZE_MAX` and
   `--v3-page-size-max` still set the maximum; servers with a higher maximum
   now return 50 events when `eventLimit` is omitted.
+- `MaltegoEntity.add_overlay` skips an overlay with an empty, blank or `None` property name and logs one warning
+  (transform, entity type, position). Before, it raised `ValueError` and failed the run. Provider data often leaves
+  that field empty, and the Java SDK accepts it too. A non-text name still raises, and so does a blank name in an
+  entity type's declared overlays. `maltego.util.trace_context.TRANSFORM_VAR` holds the running transform's qualified name.
 - Terminal V3 results now wait for execution and eligible cleanup, retaining final messages and events for paging.
 - Cancellation reaches the worker loop; inactivity expiry stops active runs instead of allowing them to report success later.
 - Multi-input outcomes preserve failures and wait for every input. Later eligible cleanup hooks now run after a hook fails.
