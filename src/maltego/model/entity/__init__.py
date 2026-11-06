@@ -931,13 +931,23 @@ class MaltegoEntity(Observable, metaclass=MaltegoEntityMeta):
             self,
             overlay_type: OverlayTypes,
             position: OverlayPositions,
-            property_name: str
+            property_name: Optional[str]
     ) -> None:
         if not isinstance(overlay_type, OverlayTypes):
             raise ValueError("add_overlay: Overlay type must be of type OverlayTypes")
 
         if not isinstance(position, OverlayPositions):
             raise ValueError("add_overlay: Overlay position must be of type OverlayPositions")
+
+        if property_name is None or (isinstance(property_name, str) and not property_name.strip()):
+            # Provider data can omit this field or leave it empty. The Java SDK accepts it and the client draws
+            # nothing, so skip only this overlay. A non-text name is a transform bug and `Overlay` still refuses it.
+            from maltego.util.trace_context import TRANSFORM_VAR  # local import: `maltego.util` imports this module
+            log.warning(
+                f"add_overlay: left out a {overlay_type.value} overlay without a property name "
+                f"(transform {TRANSFORM_VAR.get()}, entity type {self.TYPE_NAME!r}, position {position.value!r})"
+            )
+            return
 
         overlay = Overlay(
             overlay_type=overlay_type.value,

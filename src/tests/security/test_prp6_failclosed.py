@@ -509,7 +509,7 @@ async def test_delete_transform_run_succeeds_on_matching_transform_id():
     v3 = V3Server.__new__(V3Server)
 
     mock_result = MagicMock()
-    mock_result.state = ExecutionState.FINISHED
+    mock_result.state = ExecutionState.COMPLETED
     mock_result.get_duration.return_value = 42
 
     # Execution context belongs to the SAME transform as the path transform_id.
@@ -539,7 +539,7 @@ async def test_delete_transform_run_succeeds_on_matching_transform_id():
     )
 
     assert result.run_id == "some-run-id"
-    assert result.state == ExecutionState.FINISHED.value
+    assert result.state == ExecutionState.COMPLETED.value
     mock_runner.cancel.assert_called_once_with("some-run-id")
     mock_runner.delete.assert_called_once_with("some-run-id")
 

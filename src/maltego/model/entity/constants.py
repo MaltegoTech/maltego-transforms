@@ -48,10 +48,10 @@ class Overlay:
         else:
             raise TypeError("Overlay position must be strings or OverlayPositions")
 
-        if isinstance(property_name, str) and property_name:
+        if isinstance(property_name, str) and property_name.strip():
             self.property_name: str = property_name
         else:
-            raise ValueError(f"Overlay property name {property_name} must be a non-empty string")
+            raise ValueError(f"Overlay property name {property_name!r} must be a non-blank string")
 
     def to_v3_overlay(self) -> EntityOverlay:
         return EntityOverlay(

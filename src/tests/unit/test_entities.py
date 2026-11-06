@@ -962,6 +962,38 @@ def test_overlay_during_property_initialization():
     assert entity2.overlays[0].overlay_type == "text"
 
 
+@pytest.mark.parametrize("name", ["", " ", "\t\n", None])
+def test_add_overlay_skips_a_blank_property_name_and_logs_one_warning(name, caplog) -> None:
+    """A blank name from provider data skips that overlay with one warning; the other overlays stay."""
+    entity = Phrase("x")
+    entity.add_overlay(OverlayTypes.TEXT, OverlayPositions.NORTH, "first")
+    with caplog.at_level("WARNING", logger="maltego.model.entity"):
+        entity.add_overlay(OverlayTypes.TEXT, OverlayPositions.SOUTH_WEST, name)  # type: ignore[arg-type]
+    entity.add_overlay(OverlayTypes.COLOR, OverlayPositions.WEST, "last")
+
+    assert [(o.overlay_type, o.position, o.property_name) for o in entity.overlays] == [
+        ("text", "N", "first"), ("color", "W", "last")
+    ]
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1
+    assert Phrase.TYPE_NAME in warnings[0].getMessage()
+    assert "'SW'" in warnings[0].getMessage()
+
+
+@pytest.mark.parametrize("name", [5, ["a"], b"name"])
+def test_add_overlay_still_refuses_a_property_name_that_is_not_text(name) -> None:
+    """A non-text name is a transform bug and still raises."""
+    with pytest.raises(ValueError):
+        Phrase("x").add_overlay(OverlayTypes.TEXT, OverlayPositions.NORTH, name)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("name", ["", "   ", "\t"])
+def test_overlay_definition_still_refuses_a_blank_property_name(name) -> None:
+    """Declared overlays are code, not data: a blank name there still raises."""
+    with pytest.raises(ValueError):
+        Overlay(OverlayTypes.TEXT.value, OverlayPositions.NORTH.value, name)
+
+
 def test_typed_property_annotations_resolve_to_wire_types() -> None:
     # Regression guard for the Python 3.14 PEP 649/749 lazy-annotation fix in
     # maltego.model.entity._namespace_annotations. Under deferred annotations the
