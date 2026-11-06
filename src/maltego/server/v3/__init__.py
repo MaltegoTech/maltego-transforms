@@ -1041,7 +1041,7 @@ class V3Server:
                     f"Transform run {run_id} explicitly set to CANCELED via query parameter.")
 
             # When delete is sent, and we are in a state other than terminal states we assume it was canceled
-            elif state not in {ExecutionState.FINISHED, ExecutionState.COMPLETED, ExecutionState.FAILED, ExecutionState.TIMED_OUT}:
+            elif state not in {ExecutionState.COMPLETED, ExecutionState.FAILED, ExecutionState.TIMED_OUT}:
                 log.warning(
                     f"Unexpected state {state.value} for run {run_id}. Defaulting to CANCELED.")
                 state = ExecutionState.CANCELED

@@ -255,7 +255,8 @@ class TransformExecutionContext:
 
     ExecutionState.INITIALIZED = Before before_transform middlewares finished
     ExecutionState.RUNNING = After before_transform middlewares finished before main task started
-    ExecutionState.FINISHED = After main task started before after_transform middlewares are finished
+    ExecutionState.FINISHED = The main task ended; the after_transform middlewares are not finished yet. Recorded as the
+    run's outcome, never published: clients read RUNNING until the run publishes COMPLETED (or a failure state)
     ExecutionState.COMPLETED = After after_transform middlewares finished
     ExecutionState.FAILED = Transform Run failed due to unexpected error/exception
     ExecutionState.CANCELED = Transform Run canceled before it could finish
@@ -406,7 +407,8 @@ class TransformExecutionContext:
             raise
 
     def __handle_task_exception(self, exception: BaseException, state: ExecutionState = ExecutionState.FAILED) -> None:
-        """Record an outcome without publishing a terminal result during cleanup."""
+        """Record an outcome without publishing a terminal result during cleanup: the after-transform middlewares may
+        still set response headers, which `DELETE .../run/<id>` answers."""
         try:
             raise exception
         except asyncio.InvalidStateError as ex:
@@ -474,7 +476,7 @@ class TransformExecutionContext:
                 self._active_task = None
 
         self.__record_timeout()
-        self.result.state = ExecutionState.FINISHED
+        # The run keeps reading RUNNING here: the outcome is published after the after-transform middlewares.
         try:
             self.after_transform_task = asyncio.create_task(self.__after_transform())
             await self.after_transform_task
@@ -575,7 +577,6 @@ class TransformExecutionContext:
             self.result.context,
             self.limit,
         )
-        self.result.state = ExecutionState.FINISHED
         return None
 
     async def __after_transform(self) -> None:

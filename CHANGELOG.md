@@ -4,21 +4,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 1.4.2 - 2026-11-06
 
 ### Fixed
 
-- A V3 results page now holds as many events as the client asks for with
-  `eventLimit`, up to `v3_page_size_max`, whose default is now 10,000 (was 50).
-  A client can request remaining events up to that maximum instead of being
-  limited to 50. Requests without `eventLimit` still get 50 events, or the
-  configured maximum if lower. `MALTEGO_SERVER_V3_PAGE_SIZE_MAX` and
-  `--v3-page-size-max` still set the maximum; servers with a higher maximum
-  now return 50 events when `eventLimit` is omitted.
-- `MaltegoEntity.add_overlay` skips an overlay with an empty, blank or `None` property name and logs one warning
-  (transform, entity type, position). Before, it raised `ValueError` and failed the run. Provider data often leaves
-  that field empty, and the Java SDK accepts it too. A non-text name still raises, and so does a blank name in an
-  entity type's declared overlays. `maltego.util.trace_context.TRANSFORM_VAR` holds the running transform's qualified name.
+- A V3 run now reports RUNNING until its after-transform middlewares are done,
+  then COMPLETED or a failure state. Before, it reported FINISHED in between.
+  A client that stopped polling at FINISHED read only the first page of
+  results and missed the response headers those middlewares set, and its
+  `DELETE` cancelled them.
+- A V3 results page now returns up to the `eventLimit` the client asks for.
+  The default `v3_page_size_max` is now 10,000 (was 50), so a client can fetch
+  the rest of a run in one request. Without `eventLimit` a page still holds 50
+  events. If you set `v3_page_size_max` above 50, requests without
+  `eventLimit` now get 50 events instead of your maximum.
+- `MaltegoEntity.add_overlay` no longer fails the run when the property name is
+  empty, blank or `None`, which is common in provider data. It leaves that
+  overlay out and logs a warning with the transform, entity type and position.
+  A property name that is not a string still raises, and so does a blank name
+  in an entity type's declared overlays.
+
+## 1.4.1 - 2026-11-02
+
+### Fixed
+
 - Terminal V3 results now wait for execution and eligible cleanup, retaining final messages and events for paging.
 - Cancellation reaches the worker loop; inactivity expiry stops active runs instead of allowing them to report success later.
 - Multi-input outcomes preserve failures and wait for every input. Later eligible cleanup hooks now run after a hook fails.

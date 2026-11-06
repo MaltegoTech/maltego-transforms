@@ -178,8 +178,8 @@ def texts(result):
 
 
 def assert_active(response):
-    assert response.json()["result"]["state"] in {"INITIALIZED", "RUNNING", "FINISHED"}
-    assert response.headers["maltego-run-state"] in {"INITIALIZED", "RUNNING", "FINISHED"}
+    assert response.json()["result"]["state"] in {"INITIALIZED", "RUNNING"}
+    assert response.headers["maltego-run-state"] in {"INITIALIZED", "RUNNING"}
 
 
 def cancel(client, run):
