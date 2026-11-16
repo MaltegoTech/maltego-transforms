@@ -14,14 +14,14 @@ files = [
 
 [[package]]
 name = "annotated-doc"
-version = "0.0.5"
+version = "0.0.6"
 description = "Document parameters, class attributes, return types, and variables inline, with Annotated."
 optional = false
-python-versions = ">=3.9"
+python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "annotated_doc-0.0.5-py3-none-any.whl", hash = "sha256:117bac03a25ede5df5440e855b32d556049ca169ead221505badf432fed4b101"},
-    {file = "annotated_doc-0.0.5.tar.gz", hash = "sha256:c7e58ce09192557605d8bbd92836d7e1d520ac9580096042c0bfd197efacf1bb"},
+    {file = "annotated_doc-0.0.6-py3-none-any.whl", hash = "sha256:361ca0950cc7082f53fa69e9328409f40a62c61e57e0a47e1825a08078a58a53"},
+    {file = "annotated_doc-0.0.6.tar.gz", hash = "sha256:7969bb69912085b2285849c0dcac0b4b374fd180c13cf10a87f284ffcf347bbf"},
 ]
 
 [[package]]
@@ -271,14 +271,14 @@ redis = ["redis (>=2.10.5)"]
 
 [[package]]
 name = "cachetools"
-version = "7.3.0"
+version = "7.3.2"
 description = "Extensible memoizing collections and decorators"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "cachetools-7.3.0-py3-none-any.whl", hash = "sha256:2105787c94619bde7072624fec0fe7b8a08bb7bf6c757c318f8925573c6f07c9"},
-    {file = "cachetools-7.3.0.tar.gz", hash = "sha256:3f63fc208410f0c3a3b37883c4903ecdacd6f0b259134e6d2e82debd5b2e01de"},
+    {file = "cachetools-7.3.2-py3-none-any.whl", hash = "sha256:afb4b563cb37e7a121a6ea45a0deec42916c64eed58875cc15d8cf9eaca89fb2"},
+    {file = "cachetools-7.3.2.tar.gz", hash = "sha256:43e5db663b58c4337a9959069d93f54dd2e065fdd0438a504cd1100fbeb48beb"},
 ]
 
 [[package]]
@@ -659,14 +659,14 @@ files = [
 
 [[package]]
 name = "click"
-version = "8.5.0"
+version = "8.5.1"
 description = "Composable command line interface toolkit"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "click-8.5.0-py3-none-any.whl", hash = "sha256:255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360"},
-    {file = "click-8.5.0.tar.gz", hash = "sha256:ba0d2089de75ea0310e2dde03160e6ca10009947fb95a182f9b54021bb272e34"},
+    {file = "click-8.5.1-py3-none-any.whl", hash = "sha256:8bb5376d2006950386f8c6427613334a2acadc5f559cb80e638d00b4df957e37"},
+    {file = "click-8.5.1.tar.gz", hash = "sha256:9bbfada76703fd1d784b83eea012e3e8c6a001a876543ef104fa56aaaeb072b4"},
 ]
 
 [[package]]
@@ -3781,14 +3781,14 @@ files = [
 
 [[package]]
 name = "signxml"
-version = "5.2.0"
+version = "5.3.0"
 description = "Python XML Signature and XAdES library"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "signxml-5.2.0-py3-none-any.whl", hash = "sha256:47667e55d3bf974ba69cbc489610890d27052d4584a29c3d29e7cf578d50a429"},
-    {file = "signxml-5.2.0.tar.gz", hash = "sha256:18aa6c3dc6833c7f441d9d20875ea50fe50149402f87061c27d0b6ea7f039096"},
+    {file = "signxml-5.3.0-py3-none-any.whl", hash = "sha256:4fc31f162569e40411a23cb971449e579a0510bbdb0a9842db4c87e5bc737287"},
+    {file = "signxml-5.3.0.tar.gz", hash = "sha256:1a7f19fad67941ad2aae9b0daf5a53b29248308fc4911c40f7242770221a707d"},
 ]
 
 [package.dependencies]
