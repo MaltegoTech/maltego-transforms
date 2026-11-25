@@ -1261,9 +1261,10 @@ grpc = ["grpcio (>=1.59.0,<2.0.0)"]
 name = "grpcio"
 version = "1.85.3"
 description = "HTTP/2-based RPC framework"
-optional = false
+optional = true
 python-versions = ">=3.10"
 groups = ["main"]
+markers = "extra == \"tracing\""
 files = [
     {file = "grpcio-1.85.3-cp310-cp310-linux_armv7l.whl", hash = "sha256:7329aa28ad7ebe6138ae4d6e0bc68fe8bb3f91d8b2ecf95d93dc1f9fd6619cbd"},
     {file = "grpcio-1.85.3-cp310-cp310-macosx_11_0_universal2.whl", hash = "sha256:a68bc48d6762e32d3c3aaa974242ed456392e15b7e0c18026b6e9ee269b8b734"},
